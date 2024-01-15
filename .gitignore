@@ -1,0 +1,14 @@
+.Rhistory
+.ipynb_checkpoints/
+Articles/
+Example.RefinitivAPIs.R.Jupyter/
+Untitled7.ipynb
+Untitled8.ipynb
+app4.py
+bin/
+etc/
+lib/
+lib64
+nodesource_setup.sh
+pyvenv.cfg
+share/
