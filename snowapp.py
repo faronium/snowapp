@@ -85,6 +85,13 @@ df['hydrodoy'] = df['hydrodoy'].mask(df['hydrodoy']<1,df['hydrodoy']+365)
 # 
 # Make a column formatted so that gives the hydrological year. Essentially the time index, forward by 3 months,
 # then reformatted to %Y using strftime.
+# 
+
+# ## Station Snow Statistics
+# 
+# Interested in being able to correlate ENSO with timing of peak snow and amount of snow at the peak. Also interested in magnitude of peak melt rate and timing of the peak melt rate. These satistics will be part of a map-based view of the station data that will be colourized by the level of correlation or by the percent of peak snow associated with the 
+
+# In[51]:
 
 
 def datetimepandas(timestamp):
@@ -199,7 +206,21 @@ snowapp.layout = html.Div([
         multi=False  #multi=True
     ),
     dcc.Graph(id="snow-station-graph"),
-    dcc.RangeSlider(-3, 3, 0.5, value=[-0.5, 0.5], id='oni-range-slider')
+    dcc.RangeSlider(min=-3,
+                    max=3, 
+                    step=0.25, 
+                    #Range slider with custom marks.
+                    marks={
+                        -2.5: 'V. Strong La Nina',
+                        -1.5: 'Moderate La Nina',
+                        -1.0: 'Weak La Nina',
+                        -0.5: 'ENSO Neutral',
+                        0.5: 'ENSO Neutral',
+                        1.0: 'Weak El Nino',
+                        1.5: 'Moderate El Nino',
+                        2.5: 'V. Strong El Nino'
+                    },
+                    value=[-0.75, 0.75], id='oni-range-slider')
 ])
 
 fillninoarea = 'rgba(255,110,95,0.2)'
