@@ -41,9 +41,10 @@ df = pd.read_csv('./snow/SW_DailyArchive.csv',index_col=[0],parse_dates=[0]) #He
 # In[4]:
 
 
-#Subset the data following the stations with hourly records
-#dfsub1 = df[]
-#Set the rows with hours != 16:00 to NaN
+#Deal with the non-daily observations. Most are on the 16:00, some are on the 00:00 and others are on the even hour.
+#plt.close("all")
+#Set the rows with hours != 16:00 to NaN for stations '1A02P McBride Upper', '1B02P Tahtsa Lake', '1B08P Mt. Pondosy', '2F18P Brenda Mine', 
+#         '3A25P Squamish River Upper', '3A28P Tetrahedron']
 df.loc[df.index.strftime('%H').isin(['00','01','02','03','04','05','06','07','08','09','10','11',
         '12','13','14','15','17','18','19','20','21','22','23']),
         ['1A02P McBride Upper', '1B02P Tahtsa Lake', '1B08P Mt. Pondosy', '2F18P Brenda Mine', 
@@ -62,18 +63,15 @@ dfsub.index += pd.Timedelta("16 hours")
 
 
 # 
-# Now simply merge the three data frames into a master data frame that only has the data we want. 
+# Now simply merge the two data frames into a master data frame that only has the data we want. 
 # 
 
 # In[6]:
 
 
-#Subset the 
-dfsub2 = df.loc[:,~df.columns.isin(['4D16P Forrest Kerr Mid Elevation Snow','4D17P Forrest Kerr High Elevation Snow'])]
-dfsub2.loc[dfsub2.index.strftime('%H') == '22',:] = np.nan
-dfsub2 = dfsub2.dropna(axis=0,how='all')
-dfsub2 = dfsub2.join(dfsub)
-df = dfsub2.dropna(axis=0,how='all')
+df.loc[df.index.strftime('%H') == '22',~df.columns.isin(['4D16P Forrest Kerr Mid Elevation Snow','4D17P Forrest Kerr High Elevation Snow'])] = np.nan
+df = df.loc[:,~df.columns.isin(['4D16P Forrest Kerr Mid Elevation Snow','4D17P Forrest Kerr High Elevation Snow'])].join(dfsub)
+df = df.dropna(axis=0,how='all')
 
 
 # In[7]:
@@ -95,8 +93,17 @@ df['hydrological_year'] = df.index + pd.Timedelta("92 day")
 df['hydrological_year'] = df['hydrological_year'].apply(datetimepandas)
 
 
+# In[52]:
+
+
+#index = pd.MultiIndex.from_frame(df[['hydrological_year','hydrodoy']])
+#subdf = df[['1A02P McBride Upper','hydrological_year','hydrodoy']]
 #subdf_pivoted = pd.pivot_table(subdf,index=["hydrodoy"],columns="hydrological_year",values="1A02P McBride Upper")
 #onirange = list([-2,2])
+#To identify the peak ONI values during the snow year. 
+#mnxonidata = onidata.groupby(['YR']).min()
+#mnxonidata['MAX_ANOM'] = onidata.groupby(['YR']).max()['ANOM']
+#mnxonidata = mnxonidata.rename(columns={'ANOM':'MIN_ANOM'})
 #yearsuse = mnxonidata.index[(mnxonidata["ANOM"] >= onirange[0]) & 
 #    (mnxonidata["ANOM"] <= onirange[1])].unique()
 #filtereddf = subdf_pivoted.loc[:,subdf_pivoted.columns.isin(yearsuse.astype(str))]
@@ -143,7 +150,7 @@ df['hydrological_year'] = df['hydrological_year'].apply(datetimepandas)
 # In[13]:
 
 
-#FIXME: Import oceanic Nino index and massage into a form that allows selection by ENSO strength
+#Import oceanic Nino index and massage into a form that allows selection by ENSO strength
 
 onidata = pd.read_fwf('./snow/oni.ascii.txt')
 oniseaslist = list(['OND','NDJ','DJF','JFM','FMA','MAM'])
@@ -207,12 +214,11 @@ fillninaline = 'rgb(0,176,246)'
     Input("oni-range-slider", "value"),
     Input("snow-station-name","value"))
 def update_line_chart(onirange,stationname):
-    subdf = df[[stationname,'hydrological_year','hydrodoy']]
-    subdf_pivoted = pd.pivot_table(subdf,index=["hydrodoy"],columns="hydrological_year",values=stationname)
-    subdf_pivoted['median'] = subdf_pivoted.median(axis=1)
-    subdf_pivoted['min'] = subdf_pivoted['median'] - subdf_pivoted.std(axis=1)
-    subdf_pivoted.loc[(subdf_pivoted['min'] < 0),'min'] = 0
-    subdf_pivoted['max'] = subdf_pivoted['median'] + subdf_pivoted.std(axis=1)
+    #subdf = df[[stationname,'hydrological_year','hydrodoy']]
+    subdf = pd.pivot_table(df[[stationname,'hydrological_year','hydrodoy']],index=["hydrodoy"],columns="hydrological_year",values=stationname)
+    #Can probably replace the two-line calculation of min with a more complex where or mask statement
+    subdf['min'] = subdf.median(axis=1) - subdf.std(axis=1)
+    subdf.loc[(subdf['min'] < 0),'min'] = 0
     #Need to set the min and max range values to zero where they drop to negative snow amounts
     if ((onirange[0] + onirange[1])/2 > 0):
         fillarea = fillninoarea
@@ -223,16 +229,15 @@ def update_line_chart(onirange,stationname):
     
     yearsuse = mnxonidata.index[(mnxonidata["ANOM"] >= onirange[0]) & 
         (mnxonidata["ANOM"] <= onirange[1])].unique()
-    filtereddf = subdf_pivoted.loc[:,subdf_pivoted.columns.isin(yearsuse.astype(str))]
-    filtereddf.loc[:,'median'] = filtereddf.median(axis=1)
-    filtereddf['min'] = filtereddf['median'] - filtereddf.std(axis=1)
+    filtereddf = subdf.loc[:,subdf.columns.isin(yearsuse.astype(str))]
+    #Can probably replace the two-line calculation of min with a more complex where or mask statement
+    filtereddf['min'] = filtereddf.median(axis=1) - filtereddf.std(axis=1)
     filtereddf.loc[(filtereddf['min'] < 0 ),'min'] = 0
-    filtereddf['max'] = filtereddf['median'] + filtereddf.std(axis=1)
     #Need to set the min and max range values to zero where they drop to negative snow amounts
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=pd.concat([subdf_pivoted.index.to_series(),subdf_pivoted.index.to_series()[::-1]]),
-        y=pd.concat([subdf_pivoted['min'],subdf_pivoted['max'][::-1]]),
+        x=pd.concat([subdf.index.to_series(),subdf.index.to_series()[::-1]]),
+        y=pd.concat([subdf['min'],(subdf.median(axis=1) + subdf.std(axis=1))[::-1]]),
         fill='toself',
         fillcolor='rgba(100,100,100,0.2)',
         #fillcolor='rgba(0,100,80,0.2)',
@@ -242,29 +247,29 @@ def update_line_chart(onirange,stationname):
         name='SWE Range'
     ))
     fig.add_trace(go.Scatter(
-        x=subdf_pivoted.index, 
-        y=subdf_pivoted['median'],
+        x=subdf.index, 
+        y=subdf.median(axis=1),
         line_color='rgb(100,100,100)',
 #        line_color='rgb(0,100,80)',
         legendgroup='fullrecord',
         name='Median SWE'
     ))
     fig.add_trace(go.Scatter(
-        x=pd.concat([subdf_pivoted.index.to_series(),subdf_pivoted.index.to_series()[::-1]]),
-        y=pd.concat([filtereddf['min'],filtereddf['max'][::-1]]),
+        x=pd.concat([subdf.index.to_series(),subdf.index.to_series()[::-1]]),
+        y=pd.concat([filtereddf['min'],(filtereddf.median(axis=1) + filtereddf.std(axis=1))[::-1]]),
         fill='toself',
         fillcolor=fillarea,
         line_color='rgba(255,255,255,0)',
         legendgroup='onisub',
         showlegend=True,
-        name='SWE Range for ONI Selection'
+        name='Selected SWE Range'
     ))
     fig.add_trace(go.Scatter(
-        x=subdf_pivoted.index,
-        y=filtereddf['median'],
+        x=subdf.index,
+        y=filtereddf.median(axis=1),
         line_color=fillline,
         legendgroup='onisub',
-        name='Median SWE for ONI Selection'
+        name='Selected Median SWE'
     ))
     #fig = px.line(subdf_pivoted.loc[0:310,subdf_pivoted.columns.isin(yearsuse.astype(str))])
     #lets iterate through the years and plot the individual years with only the legend entry
