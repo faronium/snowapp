@@ -211,26 +211,22 @@ snowapp.layout = html.Div([
     ),
     dcc.Graph(id="snow-station-graph"),
     dcc.RangeSlider(min=-3,
-                    max=3, 
-                    step=0.1, 
+                    max=3,
+                    step=0.1,
                     #Range slider with custom marks.
                     marks={
-                        -2.5: {'label': 'V. Strong La Nina', 'style': {'color': 'rgb(0,175,245)'}},
-                        -1.50: {'label': 'Moderate La Nina', 'style': {'color': 'rgb(0,175,245)'}},
+                        -2.5: {'label': 'V. Strong La Nina', 'style': {'color': fillninaline}},
+                        -1.50: {'label': 'Moderate La Nina', 'style': {'color': fillninaline}},
                         -0.50: {'label': 'ENSO Neutral', 'style': {'color': 'rgb(80,80,80)'}},
                         0.50: {'label': 'ENSO Neutral', 'style': {'color': 'rgb(80,80,80)'}},
                         1.50: {'label': 'Moderate El Nino', 'style': {'color': fillninoline}},
                         2.5: {'label': 'V. Strong El Nino', 'style': {'color': fillninoline}}
                     },
-                    value=[-0.5, 0.5], 
+                    value=[-0.5, 0.5],
                     updatemode='drag',
                     id='oni-range-slider')
 ])
 
-fillninoarea = 'rgba(255,110,95,0.2)'
-fillninoline = 'rgb(255,110,95)'
-fillninaarea = 'rgba(0,175,245,0.2)'
-fillninaline = 'rgb(0,175,245)'
 #Now make a callback that uses the values from the drop down and the slider selection to stratify the 
 #data and make the plot
 
@@ -261,8 +257,8 @@ def update_line_chart(onirange,stationname):
     #Need to set the min and max range values to zero where they drop to negative snow amounts
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=pd.concat([subdf.index.to_series(),subdf.index.to_series()[::-1]]),
-        y=pd.concat([subdf['min'],(subdf.median(axis=1) + subdf.std(axis=1))[::-1]]),
+        x=pd.concat([subdf.index.to_series()[0:321],subdf.index.to_series()[321:0:-1]]),
+        y=pd.concat([subdf.loc[0:321,'min'],(subdf.median(axis=1) + subdf.std(axis=1))[321:0:-1]]),
         fill='toself',
         fillcolor='rgba(100,100,100,0.2)',
         line_color='rgba(255,255,255,0)',
@@ -271,15 +267,15 @@ def update_line_chart(onirange,stationname):
         name='SWE Range'
     ))
     fig.add_trace(go.Scatter(
-        x=subdf.index, 
-        y=subdf.median(axis=1),
+        x=subdf.index[0:321], 
+        y=subdf.median(axis=1)[0:321],
         line_color='rgb(100,100,100)',
         legendgroup='fullrecord',
         name='Median SWE'
     ))
     fig.add_trace(go.Scatter(
-        x=pd.concat([subdf.index.to_series(),subdf.index.to_series()[::-1]]),
-        y=pd.concat([filtereddf['min'],(filtereddf.median(axis=1) + filtereddf.std(axis=1))[::-1]]),
+        x=pd.concat([subdf.index.to_series()[0:321],subdf.index.to_series()[321:0:-1]]),
+        y=pd.concat([filtereddf.loc[0:321,'min'],(filtereddf.median(axis=1) + filtereddf.std(axis=1))[321:0:-1]]),
         fill='toself',
         fillcolor=fillarea,
         line_color='rgba(255,255,255,0)',
@@ -288,13 +284,12 @@ def update_line_chart(onirange,stationname):
         name='Selected SWE Range'
     ))
     fig.add_trace(go.Scatter(
-        x=subdf.index,
-        y=filtereddf.median(axis=1),
+        x=subdf.index[0:321],
+        y=filtereddf.median(axis=1)[0:321],
         line_color=fillline,
         legendgroup='onisub',
         name='Selected Median SWE'
     ))
-    #fig = px.line(subdf_pivoted.loc[0:310,subdf_pivoted.columns.isin(yearsuse.astype(str))])
     #lets iterate through the years and plot the individual years with only the legend entry
     #Strategy to get the plot to show only years of interest. 
     # 1) by default only show a shaded range between max and min with a line for median snow
@@ -302,8 +297,8 @@ def update_line_chart(onirange,stationname):
     #    Like this: 
     for ayear in filtereddf.columns[0:len(filtereddf.columns)-3]:
         fig.add_trace(go.Scatter(
-            x=filtereddf.index,
-            y=filtereddf.loc[:,ayear],
+            x=filtereddf.index[0:321],
+            y=filtereddf.loc[0:321,ayear],
             visible='legendonly',
             name=ayear
         ))
