@@ -210,17 +210,18 @@ snowapp.layout = html.Div([
         multi=False  #multi=True
     ),
     dcc.Graph(id="snow-station-graph"),
+    html.H5("Filter by La Niña/El Niño Strength:"),
     dcc.RangeSlider(min=-3,
                     max=3,
                     step=0.1,
                     #Range slider with custom marks.
                     marks={
-                        -2.5: {'label': 'V. Strong La Nina', 'style': {'color': fillninaline}},
-                        -1.50: {'label': 'Moderate La Nina', 'style': {'color': fillninaline}},
-                        -0.50: {'label': 'ENSO Neutral', 'style': {'color': 'rgb(80,80,80)'}},
-                        0.50: {'label': 'ENSO Neutral', 'style': {'color': 'rgb(80,80,80)'}},
-                        1.50: {'label': 'Moderate El Nino', 'style': {'color': fillninoline}},
-                        2.5: {'label': 'V. Strong El Nino', 'style': {'color': fillninoline}}
+                        -2.7: {'label': 'Extreme La Niña', 'style': {'color': fillninaline}},
+                        -1.3: {'label': 'Mod. La Niña', 'style': {'color': fillninaline}},
+                        -0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
+                        0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
+                        1.3: {'label': 'Mod. El Niño', 'style': {'color': fillninoline}},
+                        2.7: {'label': 'Extreme El Niño', 'style': {'color': fillninoline}}
                     },
                     value=[-0.5, 0.5],
                     updatemode='drag',
@@ -264,14 +265,14 @@ def update_line_chart(onirange,stationname):
         line_color='rgba(255,255,255,0)',
         legendgroup='fullrecord',
         showlegend=True,
-        name='SWE Range'
+        name='Range'
     ))
     fig.add_trace(go.Scatter(
         x=subdf.index[0:321], 
         y=subdf.median(axis=1)[0:321],
         line_color='rgb(100,100,100)',
         legendgroup='fullrecord',
-        name='Median SWE'
+        name='Median'
     ))
     fig.add_trace(go.Scatter(
         x=pd.concat([subdf.index.to_series()[0:321],subdf.index.to_series()[321:0:-1]]),
@@ -281,14 +282,14 @@ def update_line_chart(onirange,stationname):
         line_color='rgba(255,255,255,0)',
         legendgroup='onisub',
         showlegend=True,
-        name='Selected SWE Range'
+        name='Selected Range'
     ))
     fig.add_trace(go.Scatter(
         x=subdf.index[0:321],
         y=filtereddf.median(axis=1)[0:321],
         line_color=fillline,
         legendgroup='onisub',
-        name='Selected Median SWE'
+        name='Selected Median'
     ))
     #lets iterate through the years and plot the individual years with only the legend entry
     #Strategy to get the plot to show only years of interest. 
@@ -302,9 +303,20 @@ def update_line_chart(onirange,stationname):
             visible='legendonly',
             name=ayear
         ))
-    fig.update_layout(title=stationname,
-                   xaxis_title="Hydrological Day of Year",
-                   yaxis_title="Snow Water Equivalent (mm)")
+    fig.update_layout(
+        title=stationname,
+        xaxis_title = dict(text="Date", font=dict(size=22)),
+        xaxis = dict(
+            tickfont=dict(size=14),
+            tickmode = 'array',
+            tickvals = [1, 32, 62, 93, 124, 152, 183, 213, 244, 274, 305],
+            ticktext = ['1 Oct.', '1 Nov.', '1 Dec.', '1 Jan.', '1 Feb.', '1 Mar.', '1 Apr.', '1 May', '1 Jun.', '1 Jul.', '1 Aug.']
+        ),
+        yaxis_title=dict(text="Snow Water Equivalent (mm)", font=dict(size=22)),
+        yaxis = dict(
+            tickfont=dict(size=14)
+        )
+    )
 
 
     return fig
