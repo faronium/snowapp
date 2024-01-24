@@ -220,7 +220,7 @@ snowapp.layout = html.Div([
                         1.5: 'Moderate El Nino',
                         2.5: 'V. Strong El Nino'
                     },
-                    value=[-0.75, 0.75], id='oni-range-slider')
+                    value=[-0.5, 0.5], id='oni-range-slider')
 ])
 
 fillninoarea = 'rgba(255,110,95,0.2)'
