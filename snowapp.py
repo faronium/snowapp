@@ -302,7 +302,7 @@ def update_line_chart(onirange,stationname):
             name=ayear
         ))
     fig.update_layout(
-        title = dict(text="Hydrologic Year Sno Water Equivalent at Station {}<br>Oceanic Niño Index Range {} to {}".format(stationname,onirange[0],onirange[1]),
+        title = dict(text="Hydrologic Year Snow Water Equivalent at Station {}<br>Oceanic Niño Index Range {} to {}".format(stationname,onirange[0],onirange[1]),
                      font=dict(size=22)),
         xaxis_title = dict(text="Date", font=dict(size=22)),
         xaxis = dict(
