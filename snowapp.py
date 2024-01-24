@@ -28,10 +28,8 @@ from datetime import datetime
 
 df = pd.read_csv('./snow/SW_DailyArchive.csv',index_col=[0],parse_dates=[0]) #Here the [0] tells fxn to parse first column
 
+
 # ## Munging data to consistent timestamps and getting some useful indexes
-
-# In[3]:
-
 
 # 
 # Looks like there are stations that have data at a non-standard time of 16:00. Six stations that have data on the even hour at some point in their record. These are '1A02P McBride Upper', '1B02P Tahtsa Lake', '1B08P Mt. Pondosy', '2F18P Brenda Mine', '3A25P Squamish River Upper', '3A28P Tetrahedron'. In all of these stations, the hourly data is in addition to the data reported at 16:00. So, can safely drop all of the excess data without worry. 
@@ -304,7 +302,8 @@ def update_line_chart(onirange,stationname):
             name=ayear
         ))
     fig.update_layout(
-        title="Hydrologic Year Snow Water Equivalent at Station {} over Oceanic Niño Index Range {} to {}".format(stationname,onirange[0],onirange[1]),
+        title = dict(text="Hydrologic Year Sno Water Equivalent at Station {}<br>Oceanic Niño Index Range {} to {}".format(stationname,onirange[0],onirange[1]),
+                     font=dict(size=22)),
         xaxis_title = dict(text="Date", font=dict(size=22)),
         xaxis = dict(
             tickfont=dict(size=14),
