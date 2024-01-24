@@ -195,6 +195,10 @@ mnxonidata.loc[maxmap,'ANOM'] = mnxonidata.loc[maxmap,'MAX_ANOM']
 # In[50]:
 
 
+fillninoarea = 'rgba(255,110,95,0.2)'
+fillninoline = 'rgb(255,110,95)'
+fillninaarea = 'rgba(0,175,245,0.2)'
+fillninaline = 'rgb(0,175,245)'
 snowapp = Dash(__name__)
 server = snowapp.server
 snowapp.layout = html.Div([
@@ -208,27 +212,25 @@ snowapp.layout = html.Div([
     dcc.Graph(id="snow-station-graph"),
     dcc.RangeSlider(min=-3,
                     max=3, 
-                    step=0.25, 
+                    step=0.1, 
                     #Range slider with custom marks.
                     marks={
-                        -2.5: 'V. Strong La Nina',
-                        -1.5: 'Moderate La Nina',
-                        -1.0: 'Weak La Nina',
-                        -0.5: 'ENSO Neutral',
-                        0.5: 'ENSO Neutral',
-                        1.0: 'Weak El Nino',
-                        1.5: 'Moderate El Nino',
-                        2.5: 'V. Strong El Nino'
+                        -2.5: {'label': 'V. Strong La Nina', 'style': {'color': 'rgb(0,175,245)'}},
+                        -1.50: {'label': 'Moderate La Nina', 'style': {'color': 'rgb(0,175,245)'}},
+                        -0.50: {'label': 'ENSO Neutral', 'style': {'color': 'rgb(80,80,80)'}},
+                        0.50: {'label': 'ENSO Neutral', 'style': {'color': 'rgb(80,80,80)'}},
+                        1.50: {'label': 'Moderate El Nino', 'style': {'color': fillninoline}},
+                        2.5: {'label': 'V. Strong El Nino', 'style': {'color': fillninoline}}
                     },
-                    value=[-0.75, 0.75], 
+                    value=[-0.5, 0.5], 
                     updatemode='drag',
                     id='oni-range-slider')
 ])
 
 fillninoarea = 'rgba(255,110,95,0.2)'
 fillninoline = 'rgb(255,110,95)'
-fillninaarea = 'rgba(0,176,246,0.2)'
-fillninaline = 'rgb(0,176,246)'
+fillninaarea = 'rgba(0,175,245,0.2)'
+fillninaline = 'rgb(0,175,245)'
 #Now make a callback that uses the values from the drop down and the slider selection to stratify the 
 #data and make the plot
 
@@ -263,7 +265,6 @@ def update_line_chart(onirange,stationname):
         y=pd.concat([subdf['min'],(subdf.median(axis=1) + subdf.std(axis=1))[::-1]]),
         fill='toself',
         fillcolor='rgba(100,100,100,0.2)',
-        #fillcolor='rgba(0,100,80,0.2)',
         line_color='rgba(255,255,255,0)',
         legendgroup='fullrecord',
         showlegend=True,
@@ -273,7 +274,6 @@ def update_line_chart(onirange,stationname):
         x=subdf.index, 
         y=subdf.median(axis=1),
         line_color='rgb(100,100,100)',
-#        line_color='rgb(0,100,80)',
         legendgroup='fullrecord',
         name='Median SWE'
     ))
@@ -315,7 +315,7 @@ def update_line_chart(onirange,stationname):
     return fig
 
 if __name__ == '__main__':
-    snowapp.run(debug=False)
+    snowapp.run(debug=True)
 
 
 
