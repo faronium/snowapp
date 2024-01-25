@@ -76,6 +76,7 @@ dfsub.index += pd.Timedelta("16 hours")
 df.loc[df.index.strftime('%H') == '22',~df.columns.isin(['4D16P Forrest Kerr Mid Elevation Snow','4D17P Forrest Kerr High Elevation Snow'])] = np.nan
 df = df.loc[:,~df.columns.isin(['4D16P Forrest Kerr Mid Elevation Snow','4D17P Forrest Kerr High Elevation Snow'])].join(dfsub)
 df = df.dropna(axis=0,how='all')
+df = df.loc[:,df.columns.sort_values().unique()]
 
 
 # In[7]:
@@ -206,10 +207,10 @@ fillninaline = 'rgb(0,175,245)'
 snowapp = Dash(__name__)
 server = snowapp.server
 snowapp.layout = html.Div([
-    html.H4('Multi-year Snow Water Equivalent Stratified by ENSO Strength'),
+    html.H3('Multi-year Snow Water Equivalent Stratified by ENSO Strength'),
     dcc.Dropdown(
-        df.columns[0:118],
-        df.columns[60],
+        df.columns[0:124],
+        '2F05P Mission Creek',
         id='snow-station-name',
         multi=False  #multi=True
     ),
@@ -227,7 +228,7 @@ snowapp.layout = html.Div([
                         1.3: {'label': 'Mod. El Niño', 'style': {'color': fillninoline}},
                         2.7: {'label': 'Extreme El Niño', 'style': {'color': fillninoline}}
                     },
-                    value=[-0.5, 0.5],
+                    value=[-2.5, 2.5],
                     updatemode='drag',
                     id='oni-range-slider')
 ])
@@ -327,7 +328,7 @@ def update_line_chart(onirange,stationname):
     return fig
 
 if __name__ == '__main__':
-    snowapp.run(debug=True)
+    snowapp.run(debug=False)
 
 
 
