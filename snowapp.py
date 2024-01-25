@@ -28,6 +28,12 @@ from datetime import datetime
 
 df = pd.read_csv('./snow/SW_DailyArchive.csv',index_col=[0],parse_dates=[0]) #Here the [0] tells fxn to parse first column
 
+# In[43]:
+
+
+dffresh = pd.read_csv('./snow/SWDaily.csv',index_col=[0],parse_dates=[0])
+df = pd.concat([df,dffresh],axis=0)
+
 
 # ## Munging data to consistent timestamps and getting some useful indexes
 
@@ -294,7 +300,7 @@ def update_line_chart(onirange,stationname):
     # 1) by default only show a shaded range between max and min with a line for median snow
     # 2) When the data are stratified by ENSO, add to the figure with attribute visible='legendonly'
     #    Like this: 
-    for ayear in filtereddf.columns[0:len(filtereddf.columns)-3]:
+    for ayear in filtereddf.columns[0:len(filtereddf.columns)-1]:
         fig.add_trace(go.Scatter(
             x=filtereddf.index[0:321],
             y=filtereddf.loc[0:321,ayear],
