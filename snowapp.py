@@ -15,7 +15,6 @@
 import pandas as pd
 import numpy as np
 from dash import Dash, html, dcc, Input, Output, callback
-import plotly.express as px
 import plotly.graph_objects as go
 
 from datetime import datetime
@@ -27,11 +26,13 @@ from datetime import datetime
 #All teleconnections in one! ftp://ftp.cpc.ncep.noaa.gov/wd52dg/data/indices/tele_index.nh
 
 df = pd.read_csv('./snow/SW_DailyArchive.csv',index_col=[0],parse_dates=[0]) #Here the [0] tells fxn to parse first column
+#df = pd.read_csv('https://www.env.gov.bc.ca/wsd/data_searches/snow/asws/data/SW_DailyArchive.csv',index_col=[0],parse_dates=[0]) #Here the [0] tells fxn to parse first column
 
 # In[43]:
 
 
-dffresh = pd.read_csv('./snow/SWDaily.csv',index_col=[0],parse_dates=[0])
+#dffresh = pd.read_csv('./snow/SWDaily.csv',index_col=[0],parse_dates=[0])
+dffresh = pd.read_csv('https://www.env.gov.bc.ca/wsd/data_searches/snow/asws/data/SWDaily.csv',index_col=[0],parse_dates=[0])
 df = pd.concat([df,dffresh],axis=0)
 
 
@@ -105,54 +106,6 @@ df['hydrological_year'] = df.index + pd.Timedelta("92 day")
 df['hydrological_year'] = df['hydrological_year'].apply(datetimepandas)
 
 
-# In[52]:
-
-
-#index = pd.MultiIndex.from_frame(df[['hydrological_year','hydrodoy']])
-#subdf = df[['1A02P McBride Upper','hydrological_year','hydrodoy']]
-#subdf_pivoted = pd.pivot_table(subdf,index=["hydrodoy"],columns="hydrological_year",values="1A02P McBride Upper")
-#onirange = list([-2,2])
-#To identify the peak ONI values during the snow year. 
-#mnxonidata = onidata.groupby(['YR']).min()
-#mnxonidata['MAX_ANOM'] = onidata.groupby(['YR']).max()['ANOM']
-#mnxonidata = mnxonidata.rename(columns={'ANOM':'MIN_ANOM'})
-#yearsuse = mnxonidata.index[(mnxonidata["ANOM"] >= onirange[0]) & 
-#    (mnxonidata["ANOM"] <= onirange[1])].unique()
-#filtereddf = subdf_pivoted.loc[:,subdf_pivoted.columns.isin(yearsuse.astype(str))]
-#filtereddf['median'] = filtereddf.median(axis=1)
-#filtereddf['min'] = filtereddf['median'] - filtereddf.std(axis=1)
-#filtereddf.loc[(filtereddf['min'] < 0 ),'min'] = 0
-#filtereddf['max'] = filtereddf['median'] + filtereddf.std(axis=1)#Sample plotting
-#subdf_pivoted.iloc[:,0:len(subdf_pivoted.columns)-1]
-#subdf_pivoted.median(axis=1).plot()
-#subdf_pivoted.loc[0:289,:].plot(xlabel='Hydrological Day of the Year', ylabel='Snow Water Equivalent (mm)')
-
-
-# Let's make a multi-year plot of the data for a given station along an axis that is the days of the water year.
-
-# In[11]:
-
-
-#fig = px.line(subdf_pivoted.loc[0:289,:],)
-#fig.update_layout(title="1A02P McBride Upper",
-#                   xaxis_title="Hydrological Day of Year",
-#                   yaxis_title="Snow Water Equivalent (mm)")
-#fig.show()
-
-
-# In[12]:
-
-
-#Melt the dataframe into a long format for plotting flexibility.
-#meltdf = df.melt(var_name='Snow_Survey_Station',value_name='Snow_Amount', ignore_index=False)
-
-#Get the min and max date and years
-#mindate = min(df.index)
-#minyear = datetime.strftime(mindate,'%Y')
-#maxdate = max(df.index)
-#maxyear = datetime.strftime(maxdate,'%Y')
-#print (mindate,maxdate,minyear,maxyear)
-
 
 # 
 # Need to bring in the monthly ENSO data. We'll probably use the Oceanic Nino Index for this.
@@ -190,6 +143,13 @@ keepmaxmap = (mnxonidata['MIN_ANOM'] < 0) & (mnxonidata['MAX_ANOM'] > 0) & (np.a
 maxmap = maxmaxmap | keepmaxmap
 mnxonidata.loc[minmap,'ANOM'] = mnxonidata.loc[minmap,'MIN_ANOM']
 mnxonidata.loc[maxmap,'ANOM'] = mnxonidata.loc[maxmap,'MAX_ANOM']
+#Get most recent ONI and use this to set pick an ONI range to use in the slider initially.
+if mnxonidata.loc[mnxonidata.index[(len(mnxonidata)-1)],"ANOM"] > 0.5:
+    startrange = [0.5,3]
+elif mnxonidata.loc[mnxonidata.index[(len(mnxonidata)-1)],"ANOM"] < 0.5:
+    startrange = [-3,-0.5]
+else:
+    startrange = [-0.5,0.5]
 
 
 
@@ -204,10 +164,26 @@ fillninoarea = 'rgba(255,110,95,0.2)'
 fillninoline = 'rgb(255,110,95)'
 fillninaarea = 'rgba(0,175,245,0.2)'
 fillninaline = 'rgb(0,175,245)'
-snowapp = Dash(__name__)
+external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
+snowapp = Dash(__name__, external_stylesheets=external_stylesheets)
 server = snowapp.server
 snowapp.layout = html.Div([
-    html.H3('Multi-year Snow Water Equivalent Stratified by ENSO Strength'),
+    dcc.Markdown(
+        '''
+        ### Multi-year Snow Water Equivalent Stratified by ENSO Strength
+        
+        This app allows the exploration of the relationship between snow accumulation and the 
+        El Nino Southern Oscillation (ENSO) in the province of British Columbia. There is a strong
+        relationship between BC's weather in winter and spring and the state of ENSO.
+        
+        This app utilizes snow water equivalent data collected by the BC Ministry of Environment 
+        and Climate Change Strategy and its partners BC Hydro, and Rio Tinto. Data are collected
+        using instruments called snow pillows which weigh the overlying snow and that weight is 
+        converted to the water equivalent snow amount of the overlying snowpack.
+        
+        ___
+        '''
+    ),
     dcc.Dropdown(
         df.columns[0:124],
         '2F05P Mission Creek',
@@ -228,7 +204,7 @@ snowapp.layout = html.Div([
                         1.3: {'label': 'Mod. El Niño', 'style': {'color': fillninoline}},
                         2.7: {'label': 'Extreme El Niño', 'style': {'color': fillninoline}}
                     },
-                    value=[-2.5, 2.5],
+                    value=[startrange[0], startrange[1]],
                     updatemode='drag',
                     id='oni-range-slider')
 ])
@@ -254,8 +230,8 @@ def update_line_chart(onirange,stationname):
         fillarea = fillninaarea
         fillline = fillninaline
     
-    yearsuse = mnxonidata.index[(mnxonidata["ANOM"] >= onirange[0]) & 
-        (mnxonidata["ANOM"] <= onirange[1])].unique()
+    yearsuse = mnxonidata.index[(mnxonidata["ANOM"] > onirange[0]) & 
+        (mnxonidata["ANOM"] < onirange[1])].unique()
     filtereddf = subdf.loc[:,subdf.columns.isin(yearsuse.astype(str))]
     #Can probably replace the two-line calculation of min with a more complex where or mask statement
     filtereddf['min'] = filtereddf.median(axis=1) - filtereddf.std(axis=1)
@@ -309,7 +285,7 @@ def update_line_chart(onirange,stationname):
             name=ayear
         ))
     fig.update_layout(
-        title = dict(text="Hydrologic Year Snow Water Equivalent at Station \"{}\"<br>Oceanic Niño Index Range {} to {}".format(stationname,onirange[0],onirange[1]),
+        title = dict(text="Hydrologic Year SWE for \"{}\"<br>Oceanic Niño Index Range {} to {}".format(stationname,onirange[0],onirange[1]),
                      font=dict(size=22)),
         xaxis_title = dict(text="Date", font=dict(size=22)),
         xaxis = dict(
