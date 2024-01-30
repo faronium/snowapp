@@ -83,10 +83,48 @@ df = df.loc[:,df.columns.sort_values().unique()]
 # In[7]:
 
 
-df['hydrodoy'] = df.index.strftime('%j').astype(int)
-df['hydrodoy'] += -273
-#df['hydrodoy']
-df['hydrodoy'] = df['hydrodoy'].mask(df['hydrodoy']<1,df['hydrodoy']+365)
+def datetimepandas(timestamp,theformat):
+    return datetime.strftime(timestamp,theformat)
+def hydrodoy_from_timestamp(timestamps):
+    """
+    This function takes a pandas data Series object of timestamps and converts it into the day of the hydrological
+    year which starts on 1 October and runs through the end of September. Returns a pandas Series of those days of year.
+    
+    Leap years are accommodated in an ugly way through making masks on the vector. I'm sure there are more elegant ways
+    of doing this!
+    """
+    #Calculating the julian day is the first, necessary step. 
+    hydrodoy = timestamps.apply(datetimepandas,args=('%j',)).astype(int)
+    #Next, need to link logic to operate one way for years where YEAR % 4 == 0 and anotherway for years where YEAR % 4 ~= 0
+    leapmask = timestamps.apply(datetime.strftime,args=('%Y',)).astype(int) % 4 == 0
+    hydrodoy = hydrodoy - 273
+    hydrodoy.loc[leapmask] = hydrodoy.loc[leapmask] - 1 #Adjust for the leap year
+    negleapmask = leapmask & (hydrodoy < 1)
+    hydrodoy = hydrodoy.mask(hydrodoy < 1, hydrodoy+365) #Correct the days of the year prior to 1 October back to their order
+    hydrodoy.loc[negleapmask] = hydrodoy.loc[negleapmask] + 1 #Adjust for the leap year
+    return hydrodoy
+
+def wateryear_from_timestamps(timestamps):
+    """
+    This function takes a pandas data Series object of timestamps and determines the hydrological year the date
+    belongs to. Essentially, has to look at the year 92 days in the future. 
+
+    Needs error trapping or at least some type checking.
+    """
+    wateryears = timestamps + pd.Timedelta("92 day")
+    wateryears = wateryears.apply(datetimepandas,args=('%Y',))
+    wateryears = wateryears.astype(int)
+    return wateryears
+
+df['hydrodoy'] = hydrodoy_from_timestamp(df.index.to_series())
+df['hydrological_year'] = wateryear_from_timestamps(df.index.to_series())
+
+
+# In[88]:
+
+
+
+
 
 # 
 # Make a column formatted so that gives the hydrological year. Essentially the time index, forward by 3 months,
@@ -96,16 +134,6 @@ df['hydrodoy'] = df['hydrodoy'].mask(df['hydrodoy']<1,df['hydrodoy']+365)
 # ## Station Snow Statistics
 # 
 # Interested in being able to correlate ENSO with timing of peak snow and amount of snow at the peak. Also interested in magnitude of peak melt rate and timing of the peak melt rate. These satistics will be part of a map-based view of the station data that will be colourized by the level of correlation or by the percent of peak snow associated with the 
-
-# In[51]:
-
-
-def datetimepandas(timestamp):
-    return datetime.strftime(timestamp,'%Y')
-df['hydrological_year'] = df.index + pd.Timedelta("92 day")
-df['hydrological_year'] = df['hydrological_year'].apply(datetimepandas)
-
-
 
 # 
 # Need to bring in the monthly ENSO data. We'll probably use the Oceanic Nino Index for this.
@@ -164,6 +192,7 @@ fillninoarea = 'rgba(255,110,95,0.2)'
 fillninoline = 'rgb(255,110,95)'
 fillninaarea = 'rgba(0,175,245,0.2)'
 fillninaline = 'rgb(0,175,245)'
+maxdayidx = 321
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 snowapp = Dash(__name__, external_stylesheets=external_stylesheets)
 server = snowapp.server
@@ -232,15 +261,15 @@ def update_line_chart(onirange,stationname):
     
     yearsuse = mnxonidata.index[(mnxonidata["ANOM"] > onirange[0]) & 
         (mnxonidata["ANOM"] < onirange[1])].unique()
-    filtereddf = subdf.loc[:,subdf.columns.isin(yearsuse.astype(str))]
+    filtereddf = subdf.loc[:,subdf.columns.isin(yearsuse)]
     #Can probably replace the two-line calculation of min with a more complex where or mask statement
     filtereddf['min'] = filtereddf.median(axis=1) - filtereddf.std(axis=1)
     filtereddf.loc[(filtereddf['min'] < 0 ),'min'] = 0
     #Need to set the min and max range values to zero where they drop to negative snow amounts
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=pd.concat([subdf.index.to_series()[0:321],subdf.index.to_series()[321:0:-1]]),
-        y=pd.concat([subdf.loc[0:321,'min'],(subdf.median(axis=1) + subdf.std(axis=1))[321:0:-1]]),
+        x=pd.concat([subdf.index.to_series()[0:maxdayidx],subdf.index.to_series()[maxdayidx:0:-1]]),
+        y=pd.concat([subdf.loc[0:maxdayidx,'min'],(subdf.median(axis=1) + subdf.std(axis=1))[maxdayidx:0:-1]]),
         fill='toself',
         fillcolor='rgba(100,100,100,0.2)',
         line_color='rgba(255,255,255,0)',
@@ -249,15 +278,15 @@ def update_line_chart(onirange,stationname):
         name='Range'
     ))
     fig.add_trace(go.Scatter(
-        x=subdf.index[0:321], 
-        y=subdf.median(axis=1)[0:321],
+        x=subdf.index[0:maxdayidx], 
+        y=subdf.median(axis=1)[0:maxdayidx],
         line_color='rgb(100,100,100)',
         legendgroup='fullrecord',
         name='Median'
     ))
     fig.add_trace(go.Scatter(
-        x=pd.concat([subdf.index.to_series()[0:321],subdf.index.to_series()[321:0:-1]]),
-        y=pd.concat([filtereddf.loc[0:321,'min'],(filtereddf.median(axis=1) + filtereddf.std(axis=1))[321:0:-1]]),
+        x=pd.concat([subdf.index.to_series()[0:maxdayidx],subdf.index.to_series()[maxdayidx:0:-1]]),
+        y=pd.concat([filtereddf.loc[0:maxdayidx,'min'],(filtereddf.median(axis=1) + filtereddf.std(axis=1))[maxdayidx:0:-1]]),
         fill='toself',
         fillcolor=fillarea,
         line_color='rgba(255,255,255,0)',
@@ -266,8 +295,8 @@ def update_line_chart(onirange,stationname):
         name='Selected Range'
     ))
     fig.add_trace(go.Scatter(
-        x=subdf.index[0:321],
-        y=filtereddf.median(axis=1)[0:321],
+        x=subdf.index[0:maxdayidx],
+        y=filtereddf.median(axis=1)[0:maxdayidx],
         line_color=fillline,
         legendgroup='onisub',
         name='Selected Median'
@@ -277,13 +306,23 @@ def update_line_chart(onirange,stationname):
     # 1) by default only show a shaded range between max and min with a line for median snow
     # 2) When the data are stratified by ENSO, add to the figure with attribute visible='legendonly'
     #    Like this: 
-    for ayear in filtereddf.columns[0:len(filtereddf.columns)-1]:
-        fig.add_trace(go.Scatter(
-            x=filtereddf.index[0:321],
-            y=filtereddf.loc[0:321,ayear],
-            visible='legendonly',
-            name=ayear
-        ))
+    for ayear in filtereddf.columns[0:len(filtereddf.columns)-2]:
+        fig.add_trace(
+            go.Scatter(
+                x=filtereddf.index[0:maxdayidx],
+                y=filtereddf.loc[0:maxdayidx,ayear],
+                visible='legendonly',
+                name=ayear,
+            )
+        )
+    fig.add_trace(
+        go.Scatter(
+            x=filtereddf.index[0:maxdayidx],
+            y=filtereddf.loc[0:maxdayidx,filtereddf.columns[len(filtereddf.columns)-2]],
+            name=filtereddf.columns[len(filtereddf.columns)-2],
+            line_color='rgb(0,0,0)'
+        )
+    )
     fig.update_layout(
         title = dict(text="Hydrologic Year SWE for \"{}\"<br>Oceanic Niño Index Range {} to {}".format(stationname,onirange[0],onirange[1]),
                      font=dict(size=22)),
