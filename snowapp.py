@@ -261,7 +261,8 @@ def update_line_chart(onirange,stationname):
     
     yearsuse = mnxonidata.index[(mnxonidata["ANOM"] > onirange[0]) & 
         (mnxonidata["ANOM"] < onirange[1])].unique()
-    filtereddf = subdf.loc[:,subdf.columns.isin(yearsuse)]
+    yearsavail = subdf.columns[subdf.columns.isin(yearsuse)]
+    filtereddf = subdf.loc[:,yearsavail]
     #Can probably replace the two-line calculation of min with a more complex where or mask statement
     filtereddf['min'] = filtereddf.median(axis=1) - filtereddf.std(axis=1)
     filtereddf.loc[(filtereddf['min'] < 0 ),'min'] = 0
@@ -305,8 +306,16 @@ def update_line_chart(onirange,stationname):
     #Strategy to get the plot to show only years of interest. 
     # 1) by default only show a shaded range between max and min with a line for median snow
     # 2) When the data are stratified by ENSO, add to the figure with attribute visible='legendonly'
-    #    Like this: 
-    for ayear in filtereddf.columns[0:len(filtereddf.columns)-2]:
+    #    Like this:
+
+    #Okay, need to always plot the current year and not plot the current year a second time if 
+    #The current year is included in the filtered data frame.
+    currentyear = df[['hydrological_year']].max()
+    if any((currentyear.isin(yearsavail))):
+        #Deindex this by one so that the current year isn't plotted twice when the ENSO selection includes the
+        #ENSO value of the current year.
+        yearsavail = yearsavail[0:(len(yearsavail)-1)]
+    for ayear in yearsavail:
         fig.add_trace(
             go.Scatter(
                 x=filtereddf.index[0:maxdayidx],
@@ -315,12 +324,13 @@ def update_line_chart(onirange,stationname):
                 name=ayear,
             )
         )
+    #Plot the current year on the chart always.
     fig.add_trace(
         go.Scatter(
-            x=filtereddf.index[0:maxdayidx],
-            y=filtereddf.loc[0:maxdayidx,filtereddf.columns[len(filtereddf.columns)-2]],
-            name=filtereddf.columns[len(filtereddf.columns)-2],
-            line_color='rgb(0,0,0)'
+            x=subdf.index[0:maxdayidx],
+            y=subdf.loc[0:maxdayidx,currentyear[0]],
+            name='{}'.format(currentyear[0]),
+            line_color='rgb(0,0,0)',
         )
     )
     fig.update_layout(
