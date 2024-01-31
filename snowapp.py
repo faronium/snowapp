@@ -226,11 +226,12 @@ snowapp.layout = html.Div([
         Snow water equivalent stations are maintained and operated by the [BC Ministry of Environment 
         and Climate Change Strategy]
         (https://www2.gov.bc.ca/gov/content/governments/organizational-structure/ministries-organizations/ministries/environment-climate-change) 
-        and its partners [BC Hydro](https://bchydro.com), and [Rio Tinto](https://www.riotinto.com).
-        Data are collected using instruments called snow pillows which weigh the overlying snow and that weight is 
-        converted to the water equivalent snow amount of the overlying snowpack. Data are daily and comprise
-        a daily archive through the previous water year (2023 at the time of this apps creation) and the 
-        continuously updated daily data for the most recent water year. The current-year snow data will have
+        and its partners [BC Hydro](https://bchydro.com), [Rio Tinto](https://www.riotinto.com), and 
+        [Metro Vancouver](https://metrovancouver.org/). Data are collected using instruments called
+        snow pillows which weigh the overlying snow and that weight is converted to the water 
+        equivalent snow amount of the overlying snowpack. Data are daily and comprise a daily archive
+        through the previous water year (2023 at the time of this apps creation) and the continuously 
+        updated daily data for the most recent water year. The current-year snow data will have
         quality artifacts because the data have not been quality controlled. Oceanit Niño Index (ONI) is produced
         by the US National Oceanic and Atmospheric Administration's [Climate Prediction Center]
         (https://origin.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ONI_v5.php). The index is based
@@ -266,9 +267,9 @@ snowapp.layout = html.Div([
         
         #### Discalimer
         This tool is intended for educational or entertainment purposes only. The author makes no warrantee 
-        nor is liable for anything associated or resulting from the use of the app or the underlying data. 
+        nor is liable for anything associated with or resulting from the use of the app or the underlying data. 
         No claims for data correctness or accuracy are made. This application is not affiliated with the Government 
-        of British Columbia, BC Hydro or Rio Tinto. 
+        of British Columbia, BC Hydro, Rio Tinto or Metro Vancouver. 
 
         #### Author and Contact Information
         Faron Anslow
