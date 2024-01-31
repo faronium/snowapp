@@ -17,9 +17,9 @@ equivalent snow amount of the overlying snowpack. Data are daily and comprise a 
 through the previous water year (2023 at the time of this apps creation) and the continuously 
 updated daily data for the most recent water year. The current-year snow data will have
 quality artifacts because the data have not been quality controlled. Oceanic Niño Index (ONI) is produced
-by the US National Oceanic and Atmospheric Administration's [Climate Prediction Center]
-(https://origin.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ONI_v5.php). The index is based
-on sea surface temperature anomalies in the Niño 3.4 region of the tropical Pacific Ocean.
+by the US National Oceanic and Atmospheric Administration's 
+[Climate Prediction Center](https://origin.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ONI_v5.php). 
+The index is based on sea surface temperature anomalies in the Niño 3.4 region of the tropical Pacific Ocean.
 
 #### Analysis
 ###### Snow Ranges
