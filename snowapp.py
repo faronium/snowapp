@@ -225,7 +225,7 @@ snowapp.layout = html.Div([
         #### Data sources
         Snow water equivalent stations are maintained and operated by the [BC Ministry of Environment 
         and Climate Change Strategy]
-        (https://www2.gov.bc.ca/gov/content/governments/organizational-structure/ministries-organizations/ministries/environment-climate-change) 
+        (https://www2.gov.bc.ca/gov/content/environment/air-land-water/water/water-science-data/water-data-tools/snow-survey-data) 
         and its partners [BC Hydro](https://bchydro.com), [Rio Tinto](https://www.riotinto.com), and 
         [Metro Vancouver](https://metrovancouver.org/). Data are collected using instruments called
         snow pillows which weigh the overlying snow and that weight is converted to the water 
