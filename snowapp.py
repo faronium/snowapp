@@ -19,12 +19,27 @@ import plotly.graph_objects as go
 
 from datetime import datetime
 
-#Snow data URL: https://www.env.gov.bc.ca/wsd/data_searches/snow/asws/data/
-#ONI data URL: https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt
-#PNA data URL: https://www.cpc.ncep.noaa.gov/products/precip/CWlink/pna/norm.pna.monthly.b5001.current.ascii
-#NAO data URL: https://www.cpc.ncep.noaa.gov/products/precip/CWlink/pna/norm.nao.monthly.b5001.current.ascii
-#All teleconnections in one! ftp://ftp.cpc.ncep.noaa.gov/wd52dg/data/indices/tele_index.nh
+'''
+Author: Faron Anslow
+E-mail: faron.anslow@gmail.com
 
+This code generate a Dash web browser application that plots single station water-year snow evolution with
+controls to filter by station location and ENSO state. Default is to display the median and 1-sigma range 
+for the entire record, the median and 1-sigma range for a selected ENSO condition and the current year's
+snowpack evolution. 
+
+Future iterations will include a map-view component that will display the station locations with symbology
+that illustrates the relationship between various snow statistics (such as timing of peak, amplitude of peak,
+timing of peak melt, amplitude of peak melt and timing of snow loss) and seasonal teleconnection/variability 
+patterns.
+
+Sources for snow data and teleconnection index values.
+Snow data URL: https://www.env.gov.bc.ca/wsd/data_searches/snow/asws/data/
+ONI data URL: https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt
+PNA data URL: https://www.cpc.ncep.noaa.gov/products/precip/CWlink/pna/norm.pna.monthly.b5001.current.ascii
+NAO data URL: https://www.cpc.ncep.noaa.gov/products/precip/CWlink/pna/norm.nao.monthly.b5001.current.ascii
+All teleconnections in one! ftp://ftp.cpc.ncep.noaa.gov/wd52dg/data/indices/tele_index.nh
+'''
 df = pd.read_csv('./snow/SW_DailyArchive.csv',index_col=[0],parse_dates=[0]) #Here the [0] tells fxn to parse first column
 #df = pd.read_csv('https://www.env.gov.bc.ca/wsd/data_searches/snow/asws/data/SW_DailyArchive.csv',index_col=[0],parse_dates=[0]) #Here the [0] tells fxn to parse first column
 
@@ -127,7 +142,7 @@ df['hydrological_year'] = wateryear_from_timestamps(df.index.to_series())
 
 
 # 
-# Make a column formatted so that gives the hydrological year. Essentially the time index, forward by 3 months,
+# Make a column formatted that gives the hydrological year. Essentially the time index, forward by 3 months,
 # then reformatted to %Y using strftime.
 # 
 
@@ -144,8 +159,8 @@ df['hydrological_year'] = wateryear_from_timestamps(df.index.to_series())
 
 
 #Import oceanic Nino index and massage into a form that allows selection by ENSO strength
-
-onidata = pd.read_fwf('./snow/oni.ascii.txt')
+onidata = pd.read_fwf('https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt')
+#onidata = pd.read_fwf('./snow/oni.ascii.txt')
 oniseaslist = list(['OND','NDJ','DJF','JFM','FMA','MAM'])
 onidata = onidata[onidata['SEAS'].isin(oniseaslist)]
 #onidata = pd.read_fwf('https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt')
@@ -199,43 +214,78 @@ server = snowapp.server
 snowapp.layout = html.Div([
     dcc.Markdown(
         '''
-        ### Multi-year Snow Water Equivalent Stratified by ENSO Strength
+        ## Multi-year Snow Water Equivalent Stratified by ENSO Strength
         
-        This app allows the exploration of the relationship between snow accumulation and the 
-        El Nino Southern Oscillation (ENSO) in the province of British Columbia. There is a strong
-        relationship between BC's weather in winter and spring and the state of ENSO.
+        #### Introduction
+        There is a strong relationship between BC's weather in winter and spring and the state 
+        of the El Niño Southern Oscillation (ENSO) and this relationship translates to variability
+        in the province's snowpack from year to year. This app allows the exploration of that 
+        relationship between snow accumulation and ENSO in the province of British Columbia. 
         
-        This app utilizes snow water equivalent data collected by the BC Ministry of Environment 
-        and Climate Change Strategy and its partners BC Hydro, and Rio Tinto. Data are collected
-        using instruments called snow pillows which weigh the overlying snow and that weight is 
-        converted to the water equivalent snow amount of the overlying snowpack.
+        #### How-to
+        The primary component of this webpage is a graph that depicts the evolution of accumulated 
+        snow amount over the water year that runs from 1 October through 30 September in the 
+        subsequent year. User controls are a drop-down menu that provides a selection of snow measurement
+        locations organized by station identifiers grouped by snow catchment basins. The second control
+        is a slider located below the graph that allows for the selection of a range of values of the ENSO
+        strength as indicated by the Oceanic Niño Index. The third control is via the legend in the graph itself. 
+        Clicking on a legend entry turns the element on or off. Double clicking turns all elements on or off.
+        Finally, controls on the graph alow one to download an image of the current plot, reset the axes or choose
+        a graph selection method.
         
+        #### Data sources
+        Snow water equivalent stations are maintained and operated by the [BC Ministry of Environment 
+        and Climate Change Strategy]
+        (https://www2.gov.bc.ca/gov/content/governments/organizational-structure/ministries-organizations/ministries/environment-climate-change) 
+        and its partners [BC Hydro](https://bchydro.com), and [Rio Tinto](https://www.riotinto.com).
+        Data are collected using instruments called snow pillows which weigh the overlying snow and that weight is 
+        converted to the water equivalent snow amount of the overlying snowpack. Oceanit Niño Index (ONI) is produced
+        by the US National Oceanic and Atmospheric Administration's [Climate Prediction Center]
+        (https://origin.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ONI_v5.php). The index is based
+        on sea surface temperature anomalies in the Niño 3.4 region of the tropical Pacific Ocean.
+
+        #### Discalimer
+        This tool is intended for educational or entertainment purposes only. The author makes no warrantee 
+        nor is liable for anything associated or resulting from the use of the app or the underlying data. 
+        No claims for data correctness or accuracy are made. This application is not affiliated with the Government 
+        of British Columbia, BC Hydro or Rio Tinto. 
+
+        #### Author and Contact Information
+        Faron Anslow
+        <faron.anslow@gmail.com>
         ___
         '''
     ),
-    dcc.Dropdown(
-        df.columns[0:124],
-        '2F05P Mission Creek',
-        id='snow-station-name',
-        multi=False  #multi=True
-    ),
+    html.Div(className='row', children=[
+        html.Div([
+            dcc.Dropdown(
+                df.columns[0:124],
+                '2F05P Mission Creek',
+                id='snow-station-name',
+                multi=False  #multi=True
+            )
+        ], className='four columns'),
+        html.Div([
+        html.P("Filter by La Niña/El Niño Strength:"),
+        dcc.RangeSlider(
+            min=-3,
+            max=3,
+            step=0.1,
+            #Range slider with custom marks.
+            marks={
+                -2.7: {'label': 'Extreme La Niña', 'style': {'color': fillninaline}},
+                -1.3: {'label': 'Mod. La Niña', 'style': {'color': fillninaline}},
+                -0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
+                0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
+                1.3: {'label': 'Mod. El Niño', 'style': {'color': fillninoline}},
+                2.7: {'label': 'Extreme El Niño', 'style': {'color': fillninoline}}
+            },
+            value=[startrange[0], startrange[1]],
+            updatemode='drag',
+            id='oni-range-slider'),
+    ], className='eight columns'),
+    ]),    
     dcc.Graph(id="snow-station-graph"),
-    html.H5("Filter by La Niña/El Niño Strength:"),
-    dcc.RangeSlider(min=-3,
-                    max=3,
-                    step=0.1,
-                    #Range slider with custom marks.
-                    marks={
-                        -2.7: {'label': 'Extreme La Niña', 'style': {'color': fillninaline}},
-                        -1.3: {'label': 'Mod. La Niña', 'style': {'color': fillninaline}},
-                        -0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
-                        0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
-                        1.3: {'label': 'Mod. El Niño', 'style': {'color': fillninoline}},
-                        2.7: {'label': 'Extreme El Niño', 'style': {'color': fillninoline}}
-                    },
-                    value=[startrange[0], startrange[1]],
-                    updatemode='drag',
-                    id='oni-range-slider')
 ])
 
 #Now make a callback that uses the values from the drop down and the slider selection to stratify the 
