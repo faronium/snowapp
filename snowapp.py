@@ -45,8 +45,8 @@ df = pd.read_csv('./snow/SW_DailyArchive.csv',index_col=[0],parse_dates=[0]) #He
 # In[43]:
 
 
-dffresh = pd.read_csv('./snow/SWDaily.csv',index_col=[0],parse_dates=[0])
-#dffresh = pd.read_csv('https://www.env.gov.bc.ca/wsd/data_searches/snow/asws/data/SWDaily.csv',index_col=[0],parse_dates=[0])
+#dffresh = pd.read_csv('./snow/SWDaily.csv',index_col=[0],parse_dates=[0])
+dffresh = pd.read_csv('https://www.env.gov.bc.ca/wsd/data_searches/snow/asws/data/SWDaily.csv',index_col=[0],parse_dates=[0])
 df = pd.concat([df,dffresh],axis=0)
 stations_with_currentyear = dffresh.columns
 
@@ -154,8 +154,8 @@ def wateryear_from_timestamps(timestamps):
 
 #Import oceanic Nino index and massage into a form that allows selection by ENSO strength
 def get_wyear_extrema_oni():
-    #onidata = pd.read_fwf('https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt')
-    onidata = pd.read_fwf('./snow/oni.ascii.txt')
+    onidata = pd.read_fwf('https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt')
+    #onidata = pd.read_fwf('./snow/oni.ascii.txt')
     oniseaslist = list(['OND','NDJ','DJF','JFM','FMA','MAM'])
     onidata = onidata[onidata['SEAS'].isin(oniseaslist)]
     #onidata = pd.read_fwf('https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt')
@@ -315,13 +315,14 @@ def documentationmd():
     )
 mnxonidata = get_wyear_extrema_oni()
 startrange = get_oni_startrange(mnxonidata)
+currentyear = df[['hydrological_year']].max()
 snowapp.layout = html.Div([
     documentationmd(),
     html.Div(className='row', children=[
         html.Div([
             dcc.Dropdown(
                 df.columns[0:124],
-                '1E10P Kostal Lake',
+                '3A25P Squamish River Upper',
                 id='snow-station-name',
                 multi=False  #multi=True
             )
@@ -359,6 +360,11 @@ snowapp.layout = html.Div([
 def update_line_chart(onirange,stationname):
     #subdf = df[[stationname,'hydrological_year','hydrodoy']]
     subdf = pd.pivot_table(df[[stationname,'hydrological_year','hydrodoy']],index=["hydrodoy"],columns="hydrological_year",values=stationname)
+    if any(currentyear.isin(subdf.columns)):
+        station_is_active = True
+    else:
+        station_is_active = False
+
     #Can probably replace the two-line calculation of min with a more complex where or mask statement
     subdf['min'] = subdf.median(axis=1) - subdf.std(axis=1)
     subdf.loc[(subdf['min'] < 0),'min'] = 0
@@ -421,14 +427,10 @@ def update_line_chart(onirange,stationname):
 
     #Okay, need to always plot the current year and not plot the current year a second time if 
     #The current year is included in the filtered data frame.
-    currentyear = df[['hydrological_year']].max()
     if any((currentyear.isin(yearsavail))):
         #Deindex this by one so that the current year isn't plotted twice when the ENSO selection includes the
         #ENSO value of the current year.
-        station_is_active = True
         yearsavail = yearsavail[0:(len(yearsavail)-1)]
-    else:
-        station_is_active = False
 
     for ayear in yearsavail:
         fig.add_trace(
@@ -437,6 +439,7 @@ def update_line_chart(onirange,stationname):
                 y=filtereddf.loc[0:maxdayidx,ayear],
                 visible='legendonly',
                 name=ayear,
+                legend='legend2',
             )
         )
     #Plot the current year on the chart if the station is active.
@@ -447,6 +450,7 @@ def update_line_chart(onirange,stationname):
                 y=subdf.loc[0:maxdayidx,currentyear[0]],
                 name='{}'.format(currentyear[0]),
                 line_color='rgb(0,0,0)',
+                legend='legend2',
             )
         )
 
@@ -463,6 +467,18 @@ def update_line_chart(onirange,stationname):
         yaxis_title=dict(text="Snow Water Equivalent (mm)", font=dict(size=22)),
         yaxis = dict(
             tickfont=dict(size=14)
+        ),
+        legend=dict(
+            orientation="h",
+            x=0.0,
+            y=1
+        ),
+        legend2=dict(
+            orientation="h",
+            yanchor="top",
+            y=-0.23,
+            xanchor="left",
+            x=0.0
         )
     )
 
