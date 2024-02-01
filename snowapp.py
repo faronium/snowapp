@@ -16,14 +16,13 @@ import pandas as pd
 import numpy as np
 from dash import Dash, html, dcc, Input, Output, callback
 import plotly.graph_objects as go
-
 from datetime import datetime
 
 '''
 Author: Faron Anslow
 E-mail: faron.anslow@gmail.com
 
-This code generate a Dash web browser application that plots single station water-year snow evolution with
+This code generates a Dash web browser application that plots single station water-year snow evolution with
 controls to filter by station location and ENSO state. Default is to display the median and 1-sigma range 
 for the entire record, the median and 1-sigma range for a selected ENSO condition and the current year's
 snowpack evolution. 
@@ -46,9 +45,10 @@ df = pd.read_csv('./snow/SW_DailyArchive.csv',index_col=[0],parse_dates=[0]) #He
 # In[43]:
 
 
-#dffresh = pd.read_csv('./snow/SWDaily.csv',index_col=[0],parse_dates=[0])
-dffresh = pd.read_csv('https://www.env.gov.bc.ca/wsd/data_searches/snow/asws/data/SWDaily.csv',index_col=[0],parse_dates=[0])
+dffresh = pd.read_csv('./snow/SWDaily.csv',index_col=[0],parse_dates=[0])
+#dffresh = pd.read_csv('https://www.env.gov.bc.ca/wsd/data_searches/snow/asws/data/SWDaily.csv',index_col=[0],parse_dates=[0])
 df = pd.concat([df,dffresh],axis=0)
+stations_with_currentyear = dffresh.columns
 
 
 # ## Munging data to consistent timestamps and getting some useful indexes
@@ -131,12 +131,6 @@ def wateryear_from_timestamps(timestamps):
     wateryears = wateryears.astype(int)
     return wateryears
 
-df['hydrodoy'] = hydrodoy_from_timestamp(df.index.to_series())
-df['hydrological_year'] = wateryear_from_timestamps(df.index.to_series())
-
-
-# In[88]:
-
 
 
 
@@ -159,41 +153,68 @@ df['hydrological_year'] = wateryear_from_timestamps(df.index.to_series())
 
 
 #Import oceanic Nino index and massage into a form that allows selection by ENSO strength
-onidata = pd.read_fwf('https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt')
-#onidata = pd.read_fwf('./snow/oni.ascii.txt')
-oniseaslist = list(['OND','NDJ','DJF','JFM','FMA','MAM'])
-onidata = onidata[onidata['SEAS'].isin(oniseaslist)]
-#onidata = pd.read_fwf('https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt')
-#Need to add a year to the OND and NDJ seasoned years to correspond to the hydrological year that ENSO cycle belongs to.
-onidata['YR'] = onidata['YR'].mask(onidata['SEAS'].isin(['OND','NDJ']),onidata['YR']+1)
+def get_wyear_extrema_oni():
+    #onidata = pd.read_fwf('https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt')
+    onidata = pd.read_fwf('./snow/oni.ascii.txt')
+    oniseaslist = list(['OND','NDJ','DJF','JFM','FMA','MAM'])
+    onidata = onidata[onidata['SEAS'].isin(oniseaslist)]
+    #onidata = pd.read_fwf('https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt')
+    #Need to add a year to the OND and NDJ seasoned years to correspond to the hydrological year that ENSO cycle belongs to.
+    onidata['YR'] = onidata['YR'].mask(onidata['SEAS'].isin(['OND','NDJ']),onidata['YR']+1)
 
 
-#Issue here is that the selector finds the years where the ONI range was met, but needs
+    #Issue here is that the selector finds the years where the ONI range was met, but needs
+    #To identify the peak ONI values during the snow year. 
+    mnxonidata = onidata.groupby(['YR']).min()
+    mnxonidata['MAX_ANOM'] = onidata.groupby(['YR']).max()['ANOM']
+    mnxonidata = mnxonidata.rename(columns={'ANOM':'MIN_ANOM'})
+    #Three cases: 
+    #         1) where the min anom and the max anom are both negative, keep the min anom
+    #         2) where the max anom and the min anom are both positive, keep the max anom
+    #         3) where the min anom is negative and the max anom is positive, keep the largest
+    #                absolute value and it's sign.
+    minminmap = (mnxonidata['MIN_ANOM'] < 0) & (mnxonidata['MAX_ANOM'] <= 0)
+    maxmaxmap = (mnxonidata['MIN_ANOM'] >= 0) & (mnxonidata['MAX_ANOM'] > 0)
+    keepminmap = (mnxonidata['MIN_ANOM'] < 0) & (mnxonidata['MAX_ANOM'] > 0) & (np.abs(mnxonidata['MIN_ANOM']) >= np.abs(mnxonidata['MAX_ANOM']))
+    minmap = minminmap | keepminmap
+    keepmaxmap = (mnxonidata['MIN_ANOM'] < 0) & (mnxonidata['MAX_ANOM'] > 0) & (np.abs(mnxonidata['MAX_ANOM']) >= np.abs(mnxonidata['MIN_ANOM']))
+    maxmap = maxmaxmap | keepmaxmap
+    mnxonidata.loc[minmap,'ANOM'] = mnxonidata.loc[minmap,'MIN_ANOM']
+    mnxonidata.loc[maxmap,'ANOM'] = mnxonidata.loc[maxmap,'MAX_ANOM']
+    #Get most recent ONI and use this to set pick an ONI range to use in the slider initially.
+    return mnxonidata
+
+def get_oni_startrange(mnxonidata):
+    if mnxonidata.loc[mnxonidata.index[(len(mnxonidata)-1)],"ANOM"] > 0.5:
+        return [0.5,3]
+    elif mnxonidata.loc[mnxonidata.index[(len(mnxonidata)-1)],"ANOM"] < 0.5:
+        return [-3,-0.5]
+    else:
+        return [-0.5,0.5]
+
+
+
+#testname = '2F05P Mission Creek'
+#currentyear = df[['hydrological_year']].max()
+#index = pd.MultiIndex.from_frame(df[['hydrological_year','hydrodoy']])
+#subdf = df[[testname,'hydrological_year','hydrodoy']]
+#subdf
+#subdf_pivoted = pd.pivot_table(subdf,index=["hydrodoy"],columns="hydrological_year",values= testname)
+#subdf_pivoted.describe()
+#onirange = list([-3,3])
 #To identify the peak ONI values during the snow year. 
-mnxonidata = onidata.groupby(['YR']).min()
-mnxonidata['MAX_ANOM'] = onidata.groupby(['YR']).max()['ANOM']
-mnxonidata = mnxonidata.rename(columns={'ANOM':'MIN_ANOM'})
-#Three cases: 
-#         1) where the min anom and the max anom are both negative, keep the min anom
-#         2) where the max anom and the min anom are both positive, keep the max anom
-#         3) where the min anom is negative and the max anom is positive, keep the largest
-#                absolute value and it's sign.
-minminmap = (mnxonidata['MIN_ANOM'] < 0) & (mnxonidata['MAX_ANOM'] <= 0)
-maxmaxmap = (mnxonidata['MIN_ANOM'] >= 0) & (mnxonidata['MAX_ANOM'] > 0)
-keepminmap = (mnxonidata['MIN_ANOM'] < 0) & (mnxonidata['MAX_ANOM'] > 0) & (np.abs(mnxonidata['MIN_ANOM']) >= np.abs(mnxonidata['MAX_ANOM']))
-minmap = minminmap | keepminmap
-keepmaxmap = (mnxonidata['MIN_ANOM'] < 0) & (mnxonidata['MAX_ANOM'] > 0) & (np.abs(mnxonidata['MAX_ANOM']) >= np.abs(mnxonidata['MIN_ANOM']))
-maxmap = maxmaxmap | keepmaxmap
-mnxonidata.loc[minmap,'ANOM'] = mnxonidata.loc[minmap,'MIN_ANOM']
-mnxonidata.loc[maxmap,'ANOM'] = mnxonidata.loc[maxmap,'MAX_ANOM']
-#Get most recent ONI and use this to set pick an ONI range to use in the slider initially.
-if mnxonidata.loc[mnxonidata.index[(len(mnxonidata)-1)],"ANOM"] > 0.5:
-    startrange = [0.5,3]
-elif mnxonidata.loc[mnxonidata.index[(len(mnxonidata)-1)],"ANOM"] < 0.5:
-    startrange = [-3,-0.5]
-else:
-    startrange = [-0.5,0.5]
-
+#yearsuse = mnxonidata.index[(mnxonidata["ANOM"] >= onirange[0]) & 
+#    (mnxonidata["ANOM"] <= onirange[1])].unique()
+#filtereddf = subdf_pivoted.loc[:,subdf_pivoted.columns.isin(yearsuse)]
+#yearsavail = subdf_pivoted.columns[subdf_pivoted.columns.isin(yearsuse)]
+#currentyear[0]
+#filtereddf['median'] = filtereddf.median(axis=1)
+#filtereddf['min'] = filtereddf['median'] - filtereddf.std(axis=1)
+#filtereddf.loc[(filtereddf['min'] < 0 ),'min'] = 0
+#filtereddf['max'] = filtereddf['median'] + filtereddf.std(axis=1)
+#Sample plotting
+#subdf_pivoted.iloc[:,0:len(subdf_pivoted.columns)-1]
+#subdf_pivoted.loc[0:289,:].plot(xlabel='Hydrological Day of the Year', ylabel='Snow Water Equivalent (mm)')
 
 
 # ## Build the app
@@ -203,6 +224,8 @@ else:
 # In[50]:
 
 
+df['hydrodoy'] = hydrodoy_from_timestamp(df.index.to_series())
+df['hydrological_year'] = wateryear_from_timestamps(df.index.to_series())
 fillninoarea = 'rgba(255,110,95,0.2)'
 fillninoline = 'rgb(255,110,95)'
 fillninaarea = 'rgba(0,175,245,0.2)'
@@ -211,8 +234,13 @@ maxdayidx = 321
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 snowapp = Dash(__name__, external_stylesheets=external_stylesheets)
 server = snowapp.server
-snowapp.layout = html.Div([
-    dcc.Markdown(
+def documentationmd():
+    '''
+    This function contains the documentation for the app that appears in the webpage. It is formatted as 
+    markdown. Isolated this away from the rest of the app to clean up the code and keep this monster 
+    block from interfering with the readability of the already large application.
+    '''
+    return dcc.Markdown(
         '''
         ## Multi-year Snow Water Equivalent Stratified by ENSO Strength
         
@@ -249,7 +277,15 @@ snowapp.layout = html.Div([
         The Oceanic Niño Index for a given year is taken as the extrema for the winter season of interest.
         The underlying ONI data are over three-month periods and incorporate the seasons OND through MAM.
         Rules for the hydrological year are applied. So, for example, if the extrema of the ONI falls in
-        either the OND or NDJ seasons of the year 2005, the ascribed year will be 2006.  
+        either the OND or NDJ seasons of the year 2005, the ascribed year will be 2006. The slider element
+        of the app is labelled with subjective ENSO strengths. These are mapped to ONI as follows:
+        
+        * -0.5 to 0.5 is ENSO neutral
+        * -1.3 or 1.3 are mapped as moderate events
+        * -2.7 or 2.7 are mapped as extreme events. 
+
+        ONI is resolved and may be selected at 0.1 degree increments.
+        
         ###### Individual Snow Seasons
         The data from the individual years are presented as-is. As described above, the current year's data
         is likely to have spurious values that have not been corrected by quality control software.
@@ -259,11 +295,11 @@ snowapp.layout = html.Div([
         snow amount over the water year that runs from 1 October through 30 September in the 
         subsequent year. User controls are a drop-down menu that provides a selection of snow measurement
         locations organized by station identifiers grouped by snow catchment basins. The second control
-        is a slider located below the graph that allows for the selection of a range of values of the ENSO
-        strength as indicated by the Oceanic Niño Index. The third control is via the legend in the graph itself. 
-        Clicking on a legend entry turns the element on or off. Double clicking turns all elements on or off.
-        Finally, controls on the graph alow one to download an image of the current plot, reset the axes or choose
-        a graph selection method.
+        is a slider located to the right of the station picker that allows for the selection of a range 
+        of values of the ENSO strength as indicated by the Oceanic Niño Index. The third control is via 
+        the legend in the graph itself. Clicking on a legend entry turns the element on or off. 
+        Double clicking turns all elements on or off. Finally, controls on the graph alow one to download
+        an image of the current plot, reset the axes or choose a graph selection method.
         
         #### Discalimer
         This tool is intended for educational or entertainment purposes only. The author makes no warrantee 
@@ -276,12 +312,16 @@ snowapp.layout = html.Div([
         <faron.anslow@gmail.com>
         ___
         '''
-    ),
+    )
+mnxonidata = get_wyear_extrema_oni()
+startrange = get_oni_startrange(mnxonidata)
+snowapp.layout = html.Div([
+    documentationmd(),
     html.Div(className='row', children=[
         html.Div([
             dcc.Dropdown(
                 df.columns[0:124],
-                '2A21P Molson Creek',
+                '1E10P Kostal Lake',
                 id='snow-station-name',
                 multi=False  #multi=True
             )
@@ -385,7 +425,11 @@ def update_line_chart(onirange,stationname):
     if any((currentyear.isin(yearsavail))):
         #Deindex this by one so that the current year isn't plotted twice when the ENSO selection includes the
         #ENSO value of the current year.
+        station_is_active = True
         yearsavail = yearsavail[0:(len(yearsavail)-1)]
+    else:
+        station_is_active = False
+
     for ayear in yearsavail:
         fig.add_trace(
             go.Scatter(
@@ -395,15 +439,17 @@ def update_line_chart(onirange,stationname):
                 name=ayear,
             )
         )
-    #Plot the current year on the chart always.
-    fig.add_trace(
-        go.Scatter(
-            x=subdf.index[0:maxdayidx],
-            y=subdf.loc[0:maxdayidx,currentyear[0]],
-            name='{}'.format(currentyear[0]),
-            line_color='rgb(0,0,0)',
+    #Plot the current year on the chart if the station is active.
+    if station_is_active:
+        fig.add_trace(
+            go.Scatter(
+                x=subdf.index[0:maxdayidx],
+                y=subdf.loc[0:maxdayidx,currentyear[0]],
+                name='{}'.format(currentyear[0]),
+                line_color='rgb(0,0,0)',
+            )
         )
-    )
+
     fig.update_layout(
         title = dict(text="Hydrologic Year SWE for \"{}\"<br>Oceanic Niño Index Range {} to {}".format(stationname,onirange[0],onirange[1]),
                      font=dict(size=22)),
