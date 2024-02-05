@@ -346,7 +346,7 @@ def documentationmd():
         the graph alow one to download an image of the current plot, reset the axes or choose a graph 
         selection method.
         
-        #### Discalimer
+        #### Disclaimer
         This tool is intended for educational or entertainment purposes only. The author makes no warrantee 
         nor is liable for anything associated with or resulting from the use of the app or the underlying data. 
         No claims for data correctness or accuracy are made. This application is not affiliated with the Government 
