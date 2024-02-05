@@ -63,7 +63,10 @@ the graph alow one to download an image of the current plot, reset the axes or c
 selection method.
 
 #### Disclaimer
-This tool is intended for educational or entertainment purposes only. The author makes no warrantee 
+This tool is intended for educational or entertainment purposes only. Official analysis of the snow and
+water supply status for British Columbia is available from the 
+[BC River Forecast Centre](https://www2.gov.bc.ca/gov/content/environment/air-land-water/water/drought-flooding-dikes-dams/river-forecast-centre/snow-survey-water-supply-bulletin).
+The author makes no warrantee 
 nor is liable for anything associated with or resulting from the use of the app or the underlying data. 
 No claims for data correctness or accuracy are made. This application is not affiliated with the Government 
 of British Columbia, BC Hydro, Rio Tinto or Metro Vancouver. 
