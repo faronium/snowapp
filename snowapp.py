@@ -52,6 +52,13 @@ df = pd.concat([df,dffresh],axis=0)
 stations_with_currentyear = dffresh.columns
 
 
+
+# In[3]:
+
+
+locdf = pd.read_csv('./snow/SNW_ASWS.csv')
+
+
 # ## Munging data to consistent timestamps and getting some useful indexes
 
 # 
@@ -97,6 +104,39 @@ df = df.loc[:,df.columns.sort_values().unique()]
 
 
 # In[7]:
+
+
+#Filter the location file by what's in the data file and vice versa so that there is 1:1
+#correspondence between the meta data file and the data file. Let's do this on the location ID
+#locdf
+datastnids = pd.Series([i.split(' ',1)[0] for i in df.columns.to_list()])
+datastnnames = pd.Series([i.split(' ',1)[1] for i in df.columns.to_list()])
+
+
+# In[8]:
+
+
+metastnids = locdf['LCTN_ID']
+datastnnames = datastnnames[datastnids.isin(metastnids)]
+datastnids = datastnids[datastnids.isin(metastnids)]
+metastnids = metastnids[metastnids.isin(datastnids)]
+
+#re-subset the dataframes so that the 
+df.loc[:,(datastnids+' '+datastnnames)]
+locdf = locdf.loc[locdf['LCTN_ID'].isin(metastnids),:]
+
+#Okay, so now we have parity in the location station ids. Have to rebuild the data column name 
+#and then select only the data columns 
+#locdf.head()
+locdf['text'] = locdf['LCTN_ID'] + ' ' + locdf['LCTN_NM'] + '<br>Elevation: ' + (locdf['ELEVATION']).astype(str)
+
+
+# 
+# Make a column formatted that gives the hydrological year. Essentially the time index, forward by 3 months,
+# then reformatted to %Y using strftime.
+# 
+
+# In[9]:
 
 
 def datetimepandas(timestamp,theformat):
@@ -193,10 +233,6 @@ def get_oni_startrange(mnxonidata):
         return [-3,-0.5]
     else:
         return [-0.5,0.5]
-
-locdf = pd.read_csv('./snow/SNW_ASWS.csv')
-locdf['text'] = locdf['LCTN_ID'] + ' ' + locdf['LCTN_NM'] + '<br>Elevation: ' + (locdf['ELEVATION']).astype(str)
-
 
 #testname = '2F05P Mission Creek'
 #currentyear = df[['hydrological_year']].max()
@@ -297,13 +333,18 @@ def documentationmd():
         #### How-to
         The primary component of this webpage is a graph that depicts the evolution of accumulated 
         snow amount over the water year that runs from 1 October through 30 September in the 
-        subsequent year. User controls are a drop-down menu that provides a selection of snow measurement
-        locations organized by station identifiers grouped by snow catchment basins. The second control
+        subsequent year. User controls are a map that shows the location of snow-pillow sites in BC. 
+        To select a station, zoom in to a station symbol of interest and click on it. The click will
+        cause the graph to plot the data for that station. The second control
         is a slider located to the right of the station picker that allows for the selection of a range 
-        of values of the ENSO strength as indicated by the Oceanic Niño Index. The third control is via 
-        the legend in the graph itself. Clicking on a legend entry turns the element on or off. 
-        Double clicking turns all elements on or off. Finally, controls on the graph alow one to download
-        an image of the current plot, reset the axes or choose a graph selection method.
+        of values of the ENSO strength as indicated by the Oceanic Niño Index. What is plotted on the graph
+        can be controlled by clicking on elements on the two legends. The legend in the upper-left of the
+        plot controls the presentation of the median and range curves for the station. The legend below the
+        graph's axes controls the plotting of individual years. Clicking on a legend entry turns the element 
+        on or off. Double clicking turns all elements on or all but the cliked entry off. Finally, the graph and maps
+        can both be zoomed into to select the range of what's plotted. Additional controls in the upper right of 
+        the graph alow one to download an image of the current plot, reset the axes or choose a graph 
+        selection method.
         
         #### Discalimer
         This tool is intended for educational or entertainment purposes only. The author makes no warrantee 
@@ -353,7 +394,7 @@ def make_station_map():
         #width=600, 
         #height=600
     )
-    fig.update_traces(cluster=dict(enabled=True))
+    #fig.update_traces(cluster=dict(enabled=True))
     return fig
 snowapp.layout = html.Div([
     documentationmd(),

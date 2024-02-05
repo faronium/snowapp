@@ -33,7 +33,15 @@ midpoint of the range is 1.25 and thus the plot of the subset will be red in col
 The Oceanic Niño Index for a given year is taken as the extrema for the winter season of interest.
 The underlying ONI data are over three-month periods and incorporate the seasons OND through MAM.
 Rules for the hydrological year are applied. So, for example, if the extrema of the ONI falls in
-either the OND or NDJ seasons of the year 2005, the ascribed year will be 2006.  
+either the OND or NDJ seasons of the year 2005, the ascribed year will be 2006. The slider element
+of the app is labelled with subjective ENSO strengths. These are mapped to ONI as follows:
+
+* -0.5 to 0.5 is ENSO neutral
+* -1.3 or 1.3 are mapped as moderate events
+* -2.7 or 2.7 are mapped as extreme events. 
+
+ONI is resolved and may be selected at 0.1 degree increments.
+
 ###### Individual Snow Seasons
 The data from the individual years are presented as-is. As described above, the current year's data
 is likely to have spurious values that have not been corrected by quality control software.
@@ -41,13 +49,18 @@ is likely to have spurious values that have not been corrected by quality contro
 #### How-to
 The primary component of this webpage is a graph that depicts the evolution of accumulated 
 snow amount over the water year that runs from 1 October through 30 September in the 
-subsequent year. User controls are a drop-down menu that provides a selection of snow measurement
-locations organized by station identifiers grouped by snow catchment basins. The second control
-is a slider located below the graph that allows for the selection of a range of values of the ENSO
-strength as indicated by the Oceanic Niño Index. The third control is via the legend in the graph itself. 
-Clicking on a legend entry turns the element on or off. Double clicking turns all elements on or off.
-Finally, controls on the graph alow one to download an image of the current plot, reset the axes or choose
-a graph selection method.
+subsequent year. User controls are a map that shows the location of snow-pillow sites in BC. 
+To select a station, zoom in to a station symbol of interest and click on it. The click will
+cause the graph to plot the data for that station. The second control
+is a slider located to the right of the station picker that allows for the selection of a range 
+of values of the ENSO strength as indicated by the Oceanic Niño Index. What is plotted on the graph
+can be controlled by clicking on elements on the two legends. The legend in the upper-left of the
+plot controls the presentation of the median and range curves for the station. The legend below the
+graph's axes controls the plotting of individual years. Clicking on a legend entry turns the element 
+on or off. Double clicking turns all elements on or all but the cliked entry off. Finally, the graph and maps
+can both be zoomed into to select the range of what's plotted. Additional controls in the upper right of 
+the graph alow one to download an image of the current plot, reset the axes or choose a graph 
+selection method.
 
 #### Discalimer
 This tool is intended for educational or entertainment purposes only. The author makes no warrantee 
