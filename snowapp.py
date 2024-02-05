@@ -45,6 +45,7 @@ df = pd.read_csv('./snow/SW_DailyArchive.csv',index_col=[0],parse_dates=[0]) #He
 # In[43]:
 
 
+
 #dffresh = pd.read_csv('./snow/SWDaily.csv',index_col=[0],parse_dates=[0])
 dffresh = pd.read_csv('https://www.env.gov.bc.ca/wsd/data_searches/snow/asws/data/SWDaily.csv',index_col=[0],parse_dates=[0])
 df = pd.concat([df,dffresh],axis=0)
@@ -143,6 +144,8 @@ def wateryear_from_timestamps(timestamps):
 # ## Station Snow Statistics
 # 
 # Interested in being able to correlate ENSO with timing of peak snow and amount of snow at the peak. Also interested in magnitude of peak melt rate and timing of the peak melt rate. These satistics will be part of a map-based view of the station data that will be colourized by the level of correlation or by the percent of peak snow associated with the 
+df['hydrodoy'] = hydrodoy_from_timestamp(df.index.to_series())
+df['hydrological_year'] = wateryear_from_timestamps(df.index.to_series())
 
 # 
 # Need to bring in the monthly ENSO data. We'll probably use the Oceanic Nino Index for this.
@@ -158,7 +161,6 @@ def get_wyear_extrema_oni():
     #onidata = pd.read_fwf('./snow/oni.ascii.txt')
     oniseaslist = list(['OND','NDJ','DJF','JFM','FMA','MAM'])
     onidata = onidata[onidata['SEAS'].isin(oniseaslist)]
-    #onidata = pd.read_fwf('https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt')
     #Need to add a year to the OND and NDJ seasoned years to correspond to the hydrological year that ENSO cycle belongs to.
     onidata['YR'] = onidata['YR'].mask(onidata['SEAS'].isin(['OND','NDJ']),onidata['YR']+1)
 
@@ -192,6 +194,8 @@ def get_oni_startrange(mnxonidata):
     else:
         return [-0.5,0.5]
 
+locdf = pd.read_csv('./snow/SNW_ASWS.csv')
+locdf['text'] = locdf['LCTN_ID'] + ' ' + locdf['LCTN_NM'] + '<br>Elevation: ' + (locdf['ELEVATION']).astype(str)
 
 
 #testname = '2F05P Mission Creek'
@@ -316,17 +320,44 @@ def documentationmd():
 mnxonidata = get_wyear_extrema_oni()
 startrange = get_oni_startrange(mnxonidata)
 currentyear = df[['hydrological_year']].max()
+token = open(".mapbox_token").read()
+def make_station_map():
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scattermapbox(
+            lon = locdf['LONGITUDE'],
+            lat = locdf['LATITUDE'],
+            text = locdf['text'],
+            mode = 'markers',
+            marker=go.scattermapbox.Marker(
+                size = 14,
+                #color = locdf['ELEVATION',
+            )
+        )
+    )
+    fig.update_layout(
+        #title_text = 'test snow sites',
+        #showlegend = True,
+        mapbox = {
+            'accesstoken': token,
+            #'style': "outdoors",
+            'zoom': 3,
+            'center': go.layout.mapbox.Center(
+                         lat=54.5,
+                         lon=-126
+                      ),
+        },
+     )
+    fig.update_layout(
+        margin=dict(l=0, r=0, b=0, t=0),
+        #width=600, 
+        #height=600
+    )
+    fig.update_traces(cluster=dict(enabled=True))
+    return fig
 snowapp.layout = html.Div([
     documentationmd(),
     html.Div(className='row', children=[
-        html.Div([
-            dcc.Dropdown(
-                df.columns[0:124],
-                '3A25P Squamish River Upper',
-                id='snow-station-name',
-                multi=False  #multi=True
-            )
-        ], className='four columns'),
         html.Div([
         html.P("Filter by La Niña/El Niño Strength:"),
         dcc.RangeSlider(
@@ -345,10 +376,24 @@ snowapp.layout = html.Div([
             value=[startrange[0], startrange[1]],
             updatemode='drag',
             id='oni-range-slider'),
-    ], className='eight columns'),
-    ]),    
-    dcc.Graph(id="snow-station-graph"),
+    ]),
+    ]),
+    html.Div(className='row', children=[
+        html.Div([
+            dcc.Graph(
+                figure=make_station_map(),
+                id="snow-station-map",
+                clickData={'points': [{'text': '3A25P Squamish River Upper<br>Elevation: 1360.0'}]}
+            ),
+        ], className='four columns',),
+        html.Div([
+            dcc.Graph(id="snow-station-graph"),       
+        ], className='eight columns'),
+    ])
 ])
+
+
+
 
 #Now make a callback that uses the values from the drop down and the slider selection to stratify the 
 #data and make the plot
@@ -356,10 +401,30 @@ snowapp.layout = html.Div([
 @snowapp.callback(
     Output("snow-station-graph", "figure"), 
     Input("oni-range-slider", "value"),
-    Input("snow-station-name","value"))
-def update_line_chart(onirange,stationname):
+    Input('snow-station-map', 'clickData'),
+)
+def update_line_chart(onirange,clickData):
+    #Here's what the clickData look like: 
+    #{'points': [{
+    #   'curveNumber': 0,
+    #   'pointNumber': 123, 
+    #   'pointIndex': 123, 
+    #   'lon': -128.711028, 
+    #   'lat': 55.152028, 
+    #   'text': '4B18P Cedar-Kiteen<br>Elevation: 885.0', 
+    #   'bbox': {
+    #        'x0': 76.35033446674115, 
+    #        'x1': 78.35033446674115, 
+    #        'y0': 1802.8100327553746, 
+    #        'y1': 1804.8100327553746
+    #   }
+    #}
+    #]
+    #}
+    #
     #subdf = df[[stationname,'hydrological_year','hydrodoy']]
-    subdf = pd.pivot_table(df[[stationname,'hydrological_year','hydrodoy']],index=["hydrodoy"],columns="hydrological_year",values=stationname)
+    stnname = clickData['points'][0]['text'].split('<br>')[0]
+    subdf = pd.pivot_table(df[[stnname,'hydrological_year','hydrodoy']],index=["hydrodoy"],columns="hydrological_year",values=stnname)
     if any(currentyear.isin(subdf.columns)):
         station_is_active = True
     else:
@@ -455,18 +520,18 @@ def update_line_chart(onirange,stationname):
         )
 
     fig.update_layout(
-        title = dict(text="Hydrologic Year SWE for \"{}\"<br>Oceanic Niño Index Range {} to {}".format(stationname,onirange[0],onirange[1]),
-                     font=dict(size=22)),
-        xaxis_title = dict(text="Date", font=dict(size=22)),
+        title = dict(text="Hydrologic Year SWE for \"{}\"<br>Oceanic Niño Index Range {} to {}".format(stnname,onirange[0],onirange[1]),
+                     font=dict(size=18)),
+        xaxis_title = dict(text="Date", font=dict(size=18)),
         xaxis = dict(
             tickfont=dict(size=14),
             tickmode = 'array',
             tickvals = [1, 32, 62, 93, 124, 152, 183, 213, 244, 274, 305],
             ticktext = ['1 Oct.', '1 Nov.', '1 Dec.', '1 Jan.', '1 Feb.', '1 Mar.', '1 Apr.', '1 May', '1 Jun.', '1 Jul.', '1 Aug.']
         ),
-        yaxis_title=dict(text="Snow Water Equivalent (mm)", font=dict(size=22)),
+        yaxis_title=dict(text="Snow Water Equivalent (mm)", font=dict(size=18)),
         yaxis = dict(
-            tickfont=dict(size=14)
+            tickfont=dict(size=16)
         ),
         legend=dict(
             orientation="h",
@@ -476,7 +541,7 @@ def update_line_chart(onirange,stationname):
         legend2=dict(
             orientation="h",
             yanchor="top",
-            y=-0.23,
+            y=-0.25,
             xanchor="left",
             x=0.0
         )
