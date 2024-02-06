@@ -266,9 +266,9 @@ def get_oni_startrange(mnxonidata):
 
 df['hydrodoy'] = hydrodoy_from_timestamp(df.index.to_series())
 df['hydrological_year'] = wateryear_from_timestamps(df.index.to_series())
-fillninoarea = 'rgba(255,110,95,0.2)'
+fillninoarea = 'rgba(255,110,95,0.3)'
 fillninoline = 'rgb(255,110,95)'
-fillninaarea = 'rgba(0,175,245,0.2)'
+fillninaarea = 'rgba(0,175,245,0.3)'
 fillninaline = 'rgb(0,175,245)'
 maxdayidx = 321
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
@@ -374,14 +374,22 @@ def make_station_map():
             text = locdf['text'],
             mode = 'markers',
             marker=go.scattermapbox.Marker(
-                size = 14,
-                #color = locdf['ELEVATION',
-            )
+                size = 16,
+                color = 'rgba(0,175,245,0.3)',     #locdf['ELEVATION'],
+                #line_color='rgb(40,40,40,0.5)',
+                #line_width=0.5,                    #colorscale = 'earth'
+            ),
+            selected = go.scattermapbox.Selected(
+                marker = {
+                    'size': 20,
+                    'color': 'rgba(255,110,95,0.3)',
+                }
+            ),
         )
     )
     fig.update_layout(
         #title_text = 'test snow sites',
-        #showlegend = True,
+        clickmode = 'event+select',
         mapbox = {
             'accesstoken': token,
             #'style': "outdoors",
@@ -435,9 +443,6 @@ snowapp.layout = html.Div([
         ], className='eight columns'),
     ])
 ])
-
-
-
 
 #Now make a callback that uses the values from the drop down and the slider selection to stratify the 
 #data and make the plot
