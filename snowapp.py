@@ -297,9 +297,9 @@ def documentationmd():
         and its partners [BC Hydro](https://bchydro.com), [Rio Tinto](https://www.riotinto.com), and 
         [Metro Vancouver](https://metrovancouver.org/). Data are collected using instruments called
         snow pillows which weigh the overlying snow and that weight is converted to the water 
-        equivalent snow amount of the overlying snowpack. Data are daily and comprise a daily archive
-        through the previous water year (2023 at the time of this apps creation) and the continuously 
-        updated daily data for the most recent water year. The current-year snow data will have
+        equivalent content of the snowpack. Data are daily and comprise a daily archive
+        through the previous water year (2023 at the time of this app's creation) and the continuously 
+        updated daily data for the most recent water year. The current-year snow data may have
         quality artifacts because the data have not been quality controlled. Oceanic Niño Index (ONI) is produced
         by the US National Oceanic and Atmospheric Administration's [Climate Prediction Center]
         (https://origin.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ONI_v5.php). The index is based
@@ -336,18 +336,18 @@ def documentationmd():
         subsequent year. User controls are a map that shows the location of snow-pillow sites in BC. 
         To select a station, zoom in to a station symbol of interest and click on it. The click will
         cause the graph to plot the data for that station. The second control
-        is a slider located to the right of the station picker that allows for the selection of a range 
+        is a slider located at the top that allows for the selection of a range 
         of values of the ENSO strength as indicated by the Oceanic Niño Index. What is plotted on the graph
         can be controlled by clicking on elements on the two legends. The legend in the upper-left of the
         plot controls the presentation of the median and range curves for the station. The legend below the
         graph's axes controls the plotting of individual years. Clicking on a legend entry turns the element 
-        on or off. Double clicking turns all elements on or all but the cliked entry off. Finally, the graph and maps
-        can both be zoomed into to select the range of what's plotted. Additional controls in the upper right of 
+        on or off. Double clicking turns all elements on or all but the clicked entry off. Finally, the graph and maps
+        can both be zoomed into to determine the range of what's plotted. Additional controls in the upper right of 
         the graph alow one to download an image of the current plot, reset the axes or choose a graph 
         selection method.
         
         #### Disclaimer
-        This tool is intended for educational or entertainment purposes only.  Official analysis of the snow and
+        This tool is intended for educational or entertainment purposes only. Official analysis of the snow and
         water supply status for British Columbia is available from the 
         [BC River Forecast Centre](https://www2.gov.bc.ca/gov/content/environment/air-land-water/water/drought-flooding-dikes-dams/river-forecast-centre/snow-survey-water-supply-bulletin).
         The author makes no warrantee 
@@ -381,8 +381,8 @@ def make_station_map():
             ),
             selected = go.scattermapbox.Selected(
                 marker = {
-                    'size': 20,
-                    'color': 'rgba(255,110,95,0.3)',
+                    'size': 26,
+                    'color': 'rgba(255,110,95,0.7)',
                 }
             ),
         )
@@ -435,7 +435,13 @@ snowapp.layout = html.Div([
             dcc.Graph(
                 figure=make_station_map(),
                 id="snow-station-map",
-                clickData={'points': [{'text': '3A25P Squamish River Upper<br>Elevation: 1360.0'}]}
+                #This is the initil point to draw data for. Clunky way of assigning it...
+                clickData={'points': [{'text': '3A25P Squamish River Upper<br>Elevation: 1360.0'}]},
+                #Get rid of the selection buttons in the map because they will confuse with
+                #The select on click action that's desired.
+                config={
+                    'modeBarButtonsToRemove': ['pan2d', 'lasso2d', 'select2d']
+                }
             ),
         ], className='four columns',),
         html.Div([
@@ -571,7 +577,7 @@ def update_line_chart(onirange,clickData):
     fig.update_layout(
         title = dict(text="Hydrologic Year SWE for \"{}\"<br>Oceanic Niño Index Range {} to {}".format(stnname,onirange[0],onirange[1]),
                      font=dict(size=18)),
-        xaxis_title = dict(text="Date", font=dict(size=18)),
+        #xaxis_title = dict(text="Date", font=dict(size=18)),
         xaxis = dict(
             tickfont=dict(size=14),
             tickmode = 'array',
