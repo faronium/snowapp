@@ -539,7 +539,8 @@ def make_station_map(reccheck):
         },
      )
     fig.update_layout(
-        margin=dict(l=0, r=0, b=0, t=0),
+        margin = dict(l=0, r=0, b=0, t=0),
+        mapbox_bounds = {"west": -142, "east": -110, "south": 45, "north": 63},
         #width=600, 
         #height=600
     )
