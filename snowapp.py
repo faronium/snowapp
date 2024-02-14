@@ -513,14 +513,14 @@ def make_station_map(reccheck):
             mode = 'markers',
             marker=go.scattermapbox.Marker(
                 size = 16,
-                color = 'rgba(0,175,245,0.3)',     #locdf['ELEVATION'],
+                color = 'rgba(0,175,245,0.7)',     #locdf['ELEVATION'],
                 #line_color='rgb(40,40,40,0.5)',
                 #line_width=0.5,                    #colorscale = 'earth'
             ),
             selected = go.scattermapbox.Selected(
                 marker = {
                     'size': 26,
-                    'color': 'rgba(255,110,95,0.7)',
+                    'color': 'rgba(255,110,95,0.99)',
                 }
             ),
         )
@@ -530,7 +530,7 @@ def make_station_map(reccheck):
         clickmode = 'event+select',
         mapbox = {
             'accesstoken': token,
-            #'style': "outdoors",
+            'style': 'outdoors',
             'zoom': 3,
             'center': go.layout.mapbox.Center(
                          lat=54.5,
