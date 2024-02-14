@@ -49,16 +49,41 @@ is likely to have spurious values that have not been corrected by quality contro
 #### How-to
 The primary component of this webpage is a graph that depicts the evolution of accumulated 
 snow amount over the water year that runs from 1 October through 30 September in the 
-subsequent year. User controls are a map that shows the location of snow-pillow sites in BC. 
+subsequent year. User controls are:
+
+* a **checklist** in the upper left to subset data to that with current year data and that with more than 20 years;
+* a **slider** in the upper right that allows for the selection of a range of values of the ENSO strength;
+* a **map** that shows the location of snow-pillow sites in BC; 
+* a **graph** that plots the snow water equivalent for the hydrological year.
+
+###### The Checklist
+The checklist contains two items whose selection causes the stations available for plotting to be
+subset. By default, the *Require current year?* option is selected to show stations that have data for
+the current year. The second option allows the restriction of available data to those stations with 20 or more
+years of record. Furthermore, a station is considered to have data for a given year only if the timeseries
+more than 80% complete. These longer, more complete records are recommended for investigating the ENSO/snow
+relationship for a given station.
+
+###### The ENSO Slider
+The slider allows for the selection of a range of values of the ENSO strength as 
+determined by the Oceanic Niño Index. Click and drag the handles or click on the slider
+bar and the range will adjust to your input. The **graph** title will respond and
+show you the currently selected ONI range. To view the entirety of the data for the chosen
+station, select the extreme ends of the range slider to encompass all ENSO conditions.
+
+###### The Map
 To select a station, zoom in to a station symbol of interest and click on it. The click will
-cause the graph to plot the data for that station. The second control
-is a slider located at the top that allows for the selection of a range 
-of values of the ENSO strength as indicated by the Oceanic Niño Index. What is plotted on the graph
-can be controlled by clicking on elements on the two legends. The legend in the upper-left of the
-plot controls the presentation of the median and range curves for the station. The legend below the
+cause the graph to plot the data for that station and highlight the station in red. There 
+are four button controls in the upper right corner of the map that allow downloading an 
+image of the current map, zooming in, zooming out or resetting the axes. 
+
+###### The Graph
+What is plotted on the graph is dictated by the other app elements and can also be controlled by
+interacting with the two legends. The legend in the upper-left of the plot controls the 
+presentation of the median and range curves for the station. The legend below the
 graph's axes controls the plotting of individual years. Clicking on a legend entry turns the element 
 on or off. Double clicking turns all elements on or all but the clicked entry off. Finally, the graph and maps
-can both be zoomed into to determine the range of what's plotted. Additional controls in the upper right of 
+can both be zoomed into to modify the range of what is plotted. Additional controls in the upper right of 
 the graph alow one to download an image of the current plot, reset the axes or choose a graph 
 selection method.
 
@@ -66,7 +91,7 @@ selection method.
 This tool is intended for educational or entertainment purposes only. Official analysis of the snow and
 water supply status for British Columbia is available from the 
 [BC River Forecast Centre](https://www2.gov.bc.ca/gov/content/environment/air-land-water/water/drought-flooding-dikes-dams/river-forecast-centre/snow-survey-water-supply-bulletin).
-The author makes no warrantee 
+The author makes no warranty 
 nor is liable for anything associated with or resulting from the use of the app or the underlying data. 
 No claims for data correctness or accuracy are made. This application is not affiliated with the Government 
 of British Columbia, BC Hydro, Rio Tinto or Metro Vancouver. 

@@ -49,7 +49,13 @@ df = pd.read_csv('./snow/SW_DailyArchive.csv',index_col=[0],parse_dates=[0]) #He
 #dffresh = pd.read_csv('./snow/SWDaily.csv',index_col=[0],parse_dates=[0])
 dffresh = pd.read_csv('https://www.env.gov.bc.ca/wsd/data_searches/snow/asws/data/SWDaily.csv',index_col=[0],parse_dates=[0])
 df = pd.concat([df,dffresh],axis=0)
-stations_with_currentyear = dffresh.columns
+#Check current data for entries with all na/no data
+if (dffresh.isna().sum() == len(dffresh)).any():
+    #Have stations with all rows of na, must subset dffresh to remove those stations.
+    print('hi')
+    stations_with_current_year = dffresh.columns[~(dffresh.isna().sum() == len(dffresh))]
+else:
+    stations_with_current_year = dffresh.columns[~(dffresh.isna().sum() == len(dffresh))]
 
 
 
@@ -186,6 +192,29 @@ def wateryear_from_timestamps(timestamps):
 # Interested in being able to correlate ENSO with timing of peak snow and amount of snow at the peak. Also interested in magnitude of peak melt rate and timing of the peak melt rate. These satistics will be part of a map-based view of the station data that will be colourized by the level of correlation or by the percent of peak snow associated with the 
 df['hydrodoy'] = hydrodoy_from_timestamp(df.index.to_series())
 df['hydrological_year'] = wateryear_from_timestamps(df.index.to_series())
+#df.columns
+#index = pd.MultiIndex.from_arrays([df.index,hydrodoy_from_timestamp(df.index.to_series()),wateryear_from_timestamps(df.index.to_series())],names=('Date','hydrodoy','hydrological_year'))
+#df.index = index
+#index
+
+
+# In[43]:
+
+
+#Get the peak snow each year:
+df.groupby(by="hydrological_year").apply(max)
+#Now have to find when that peak occurred...!
+def count_coverage(series):
+    return (~series.isna()).sum()
+
+#pd.set_option('display.max_rows', 150)
+#Find the number of years with more than 80% data coverage.
+nyears_complete = (df.groupby(by="hydrological_year").apply(count_coverage)*100/365 > 80).sum(axis='rows')
+peak_annual_snow = df.groupby(by="hydrological_year").apply(max)
+
+#Now get stations with some chosen common period of record. Preferably this will be a subset of the stations with current
+#and stations with more than x number of years. 
+
 
 # 
 # Need to bring in the monthly ENSO data. We'll probably use the Oceanic Nino Index for this.
@@ -197,8 +226,8 @@ df['hydrological_year'] = wateryear_from_timestamps(df.index.to_series())
 
 #Import oceanic Nino index and massage into a form that allows selection by ENSO strength
 def get_wyear_extrema_oni():
-    onidata = pd.read_fwf('https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt')
-    #onidata = pd.read_fwf('./snow/oni.ascii.txt')
+    #onidata = pd.read_fwf('https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt')
+    onidata = pd.read_fwf('./snow/oni.ascii.txt')
     oniseaslist = list(['OND','NDJ','DJF','JFM','FMA','MAM'])
     onidata = onidata[onidata['SEAS'].isin(oniseaslist)]
     #Need to add a year to the OND and NDJ seasoned years to correspond to the hydrological year that ENSO cycle belongs to.
@@ -333,16 +362,41 @@ def documentationmd():
         #### How-to
         The primary component of this webpage is a graph that depicts the evolution of accumulated 
         snow amount over the water year that runs from 1 October through 30 September in the 
-        subsequent year. User controls are a map that shows the location of snow-pillow sites in BC. 
+        subsequent year. User controls are:
+
+        * a **checklist** in the upper left to subset data to that with current year data and that with more than 20 years;
+        * a **slider** in the upper right that allows for the selection of a range of values of the ENSO strength;
+        * a **map** that shows the location of snow-pillow sites in BC; 
+        * a **graph** that plots the snow water equivalent for the hydrological year.
+        
+        ###### The Checklist
+        The checklist contains two items whose selection causes the stations available for plotting to be
+        subset. By default, the *Require current year?* option is selected to show stations that have data for
+        the current year. The second option allows the restriction of available data to those stations with 20 or more
+        years of record. Furthermore, a station is considered to have data for a given year only if the timeseries
+        more than 80% complete. These longer, more complete records are recommended for investigating the ENSO/snow
+        relationship for a given station.
+        
+        ###### The ENSO Slider
+        The slider allows for the selection of a range of values of the ENSO strength as 
+        determined by the Oceanic Niño Index. Click and drag the handles or click on the slider
+        bar and the range will adjust to your input. The **graph** title will respond and
+        show you the currently selected ONI range. To view the entirety of the data for the chosen
+        station, select the extreme ends of the range slider to encompass all ENSO conditions.
+
+        ###### The Map
         To select a station, zoom in to a station symbol of interest and click on it. The click will
-        cause the graph to plot the data for that station. The second control
-        is a slider located at the top that allows for the selection of a range 
-        of values of the ENSO strength as indicated by the Oceanic Niño Index. What is plotted on the graph
-        can be controlled by clicking on elements on the two legends. The legend in the upper-left of the
-        plot controls the presentation of the median and range curves for the station. The legend below the
+        cause the graph to plot the data for that station and highlight the station in red. There 
+        are four button controls in the upper right corner of the map that allow downloading an 
+        image of the current map, zooming in, zooming out or resetting the axes. 
+
+        ###### The Graph
+        What is plotted on the graph is dictated by the other app elements and can also be controlled by
+        interacting with the two legends. The legend in the upper-left of the plot controls the 
+        presentation of the median and range curves for the station. The legend below the
         graph's axes controls the plotting of individual years. Clicking on a legend entry turns the element 
         on or off. Double clicking turns all elements on or all but the clicked entry off. Finally, the graph and maps
-        can both be zoomed into to determine the range of what's plotted. Additional controls in the upper right of 
+        can both be zoomed into to modify the range of what is plotted. Additional controls in the upper right of 
         the graph alow one to download an image of the current plot, reset the axes or choose a graph 
         selection method.
         
@@ -350,7 +404,7 @@ def documentationmd():
         This tool is intended for educational or entertainment purposes only. Official analysis of the snow and
         water supply status for British Columbia is available from the 
         [BC River Forecast Centre](https://www2.gov.bc.ca/gov/content/environment/air-land-water/water/drought-flooding-dikes-dams/river-forecast-centre/snow-survey-water-supply-bulletin).
-        The author makes no warrantee 
+        The author makes no warranty 
         nor is liable for anything associated with or resulting from the use of the app or the underlying data. 
         No claims for data correctness or accuracy are made. This application is not affiliated with the Government 
         of British Columbia, BC Hydro, Rio Tinto or Metro Vancouver. 
@@ -365,13 +419,97 @@ mnxonidata = get_wyear_extrema_oni()
 startrange = get_oni_startrange(mnxonidata)
 currentyear = df[['hydrological_year']].max()
 token = open(".mapbox_token").read()
-def make_station_map():
+snowapp.layout = html.Div([
+    documentationmd(),
+    html.Div(className='row', children=[
+        html.Div([
+            #Want to implement a checklist here that allows for the selection of one or more of three
+            #things
+            #
+            #1) Want to allow restriction to long records only
+            #2) Want to allow restriction to records with current year only
+            #3) Want an option to show only locations with data in an overlapping normal period
+            #    or restricted normal period. 1991 -- 2020 or 2000 to 2020 ideally and restrict the stats to those.
+            #
+            #This is never going to be simple as we'll have to decide if these combine and how they combine.
+            #So, this might be best achieved with three binaries. i.e. restrict to stations with this year's data yes/no
+            dcc.Checklist(
+                options=[
+                    {'label': 'Require current year?', 'value': 'rcy'},
+                    {'label': 'Require 20 or more years?', 'value': 'rtmy'},
+                #    {'label': 'Require current normal preiod', 'value': 'rcnp'},
+                ],
+                value=['rcy'],
+                #inline=True,
+                id='record-length-current-check',
+            )
+        ], className='four columns',),
+        html.Div([
+        html.P("Filter by La Niña/El Niño Strength:"),
+        dcc.RangeSlider(
+            min=-3,
+            max=3,
+            step=0.1,
+            #Range slider with custom marks.
+            marks={
+                -2.7: {'label': 'Extreme La Niña', 'style': {'color': fillninaline}},
+                -1.3: {'label': 'Mod. La Niña', 'style': {'color': fillninaline}},
+                -0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
+                0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
+                1.3: {'label': 'Mod. El Niño', 'style': {'color': fillninoline}},
+                2.7: {'label': 'Extreme El Niño', 'style': {'color': fillninoline}}
+            },
+            value=[startrange[0], startrange[1]],
+            updatemode='drag',
+            id='oni-range-slider'),
+        ], className='eight columns',),
+    ]),
+    html.Div(className='row', children=[
+        html.Div([
+            dcc.Graph(
+                id="snow-station-map",
+                #This is the initil point to draw data for. Clunky way of assigning it...
+                clickData={'points': [{'text': '3A25P Squamish River Upper<br>Elevation: 1360.0'}]},
+                #Get rid of the selection buttons in the map because they will confuse with
+                #The select on click action that's desired.
+                config={
+                    'modeBarButtonsToRemove': ['pan2d', 'lasso2d', 'select2d']
+                }
+            ),
+        ], className='four columns',),
+        html.Div([
+            dcc.Graph(id="snow-station-graph",
+                config={
+                    'modeBarButtonsToRemove': ['zoom2d', 'pan2d', 'autoScale2d']
+                }
+            ),       
+        ], className='eight columns'),
+    ])
+])
+
+@snowapp.callback(
+    Output('snow-station-map', 'figure'), 
+    Input('record-length-current-check','value'),
+)
+def make_station_map(reccheck):
+    #So, we have 
+    #    stations_with_current_year, 
+    #    locdf with the station meta data, 
+    #    nyears_complete with the number of years of data
+    locdfuse = locdf
+    if ('rcy' in reccheck):
+        #Only keep stations with current year's data
+        locdfuse = locdfuse.loc[(locdfuse['LCTN_ID'] + ' ' + locdfuse['LCTN_NM']).isin(pd.Series(stations_with_current_year)),:]
+    if ('rtmy' in reccheck):
+        #Only keep stations that have 30 or more years of complete records.
+        locdfuse = locdfuse.loc[(locdfuse['LCTN_ID'] + ' ' + locdfuse['LCTN_NM']).isin(pd.Series(nyears_complete.index[nyears_complete >= 20])),:]
+    
     fig = go.Figure()
     fig.add_trace(
         go.Scattermapbox(
-            lon = locdf['LONGITUDE'],
-            lat = locdf['LATITUDE'],
-            text = locdf['text'],
+            lon = locdfuse['LONGITUDE'],
+            lat = locdfuse['LATITUDE'],
+            text = locdfuse['text'],
             mode = 'markers',
             marker=go.scattermapbox.Marker(
                 size = 16,
@@ -407,55 +545,13 @@ def make_station_map():
     )
     #fig.update_traces(cluster=dict(enabled=True))
     return fig
-snowapp.layout = html.Div([
-    documentationmd(),
-    html.Div(className='row', children=[
-        html.Div([
-        html.P("Filter by La Niña/El Niño Strength:"),
-        dcc.RangeSlider(
-            min=-3,
-            max=3,
-            step=0.1,
-            #Range slider with custom marks.
-            marks={
-                -2.7: {'label': 'Extreme La Niña', 'style': {'color': fillninaline}},
-                -1.3: {'label': 'Mod. La Niña', 'style': {'color': fillninaline}},
-                -0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
-                0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
-                1.3: {'label': 'Mod. El Niño', 'style': {'color': fillninoline}},
-                2.7: {'label': 'Extreme El Niño', 'style': {'color': fillninoline}}
-            },
-            value=[startrange[0], startrange[1]],
-            updatemode='drag',
-            id='oni-range-slider'),
-    ]),
-    ]),
-    html.Div(className='row', children=[
-        html.Div([
-            dcc.Graph(
-                figure=make_station_map(),
-                id="snow-station-map",
-                #This is the initil point to draw data for. Clunky way of assigning it...
-                clickData={'points': [{'text': '3A25P Squamish River Upper<br>Elevation: 1360.0'}]},
-                #Get rid of the selection buttons in the map because they will confuse with
-                #The select on click action that's desired.
-                config={
-                    'modeBarButtonsToRemove': ['pan2d', 'lasso2d', 'select2d']
-                }
-            ),
-        ], className='four columns',),
-        html.Div([
-            dcc.Graph(id="snow-station-graph"),       
-        ], className='eight columns'),
-    ])
-])
 
 #Now make a callback that uses the values from the drop down and the slider selection to stratify the 
 #data and make the plot
 
 @snowapp.callback(
-    Output("snow-station-graph", "figure"), 
-    Input("oni-range-slider", "value"),
+    Output('snow-station-graph', 'figure'), 
+    Input('oni-range-slider', 'value'),
     Input('snow-station-map', 'clickData'),
 )
 def update_line_chart(onirange,clickData):
@@ -505,6 +601,8 @@ def update_line_chart(onirange,clickData):
     filtereddf.loc[(filtereddf['min'] < 0 ),'min'] = 0
     #Need to set the min and max range values to zero where they drop to negative snow amounts
     fig = go.Figure()
+    #These next four add_trace/go.Scatter calls/objects build the median and range lines/area plots. 
+    #Range for the full dataset.
     fig.add_trace(go.Scatter(
         x=pd.concat([subdf.index.to_series()[0:maxdayidx],subdf.index.to_series()[maxdayidx:0:-1]]),
         y=pd.concat([subdf.loc[0:maxdayidx,'min'],(subdf.median(axis=1) + subdf.std(axis=1))[maxdayidx:0:-1]]),
@@ -515,6 +613,7 @@ def update_line_chart(onirange,clickData):
         showlegend=True,
         name='Range'
     ))
+    #Median for the full dataset
     fig.add_trace(go.Scatter(
         x=subdf.index[0:maxdayidx], 
         y=subdf.median(axis=1)[0:maxdayidx],
@@ -522,6 +621,7 @@ def update_line_chart(onirange,clickData):
         legendgroup='fullrecord',
         name='Median'
     ))
+    #Range for the ENSO subset of the data.
     fig.add_trace(go.Scatter(
         x=pd.concat([subdf.index.to_series()[0:maxdayidx],subdf.index.to_series()[maxdayidx:0:-1]]),
         y=pd.concat([filtereddf.loc[0:maxdayidx,'min'],(filtereddf.median(axis=1) + filtereddf.std(axis=1))[maxdayidx:0:-1]]),
@@ -532,6 +632,7 @@ def update_line_chart(onirange,clickData):
         showlegend=True,
         name='Selected Range'
     ))
+    #Median for the ENSO subset of the data.
     fig.add_trace(go.Scatter(
         x=subdf.index[0:maxdayidx],
         y=filtereddf.median(axis=1)[0:maxdayidx],
