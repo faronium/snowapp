@@ -47,8 +47,8 @@ df = pd.read_csv('./snow/SW_DailyArchive.csv',index_col=[0],parse_dates=[0]) #He
 
 
 
-dffresh = pd.read_csv('./snow/SWDaily.csv',index_col=[0],parse_dates=[0])
-#dffresh = pd.read_csv('https://www.env.gov.bc.ca/wsd/data_searches/snow/asws/data/SWDaily.csv',index_col=[0],parse_dates=[0])
+#dffresh = pd.read_csv('./snow/SWDaily.csv',index_col=[0],parse_dates=[0])
+dffresh = pd.read_csv('https://www.env.gov.bc.ca/wsd/data_searches/snow/asws/data/SWDaily.csv',index_col=[0],parse_dates=[0])
 df = pd.concat([df,dffresh],axis=0)
 #Check current data for entries with all na/no data
 if (dffresh.isna().sum() == len(dffresh)).any():
@@ -227,8 +227,8 @@ peak_annual_snow = df.groupby(by="hydrological_year").apply(max)
 
 #Import oceanic Nino index and massage into a form that allows selection by ENSO strength
 def get_wyear_extrema_oni():
-    #onidata = pd.read_fwf('https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt')
-    onidata = pd.read_fwf('./snow/oni.ascii.txt')
+    onidata = pd.read_fwf('https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt')
+    #onidata = pd.read_fwf('./snow/oni.ascii.txt')
     oniseaslist = list(['OND','NDJ','DJF','JFM','FMA','MAM'])
     onidata = onidata[onidata['SEAS'].isin(oniseaslist)]
     #Need to add a year to the OND and NDJ seasoned years to correspond to the hydrological year that ENSO cycle belongs to.
