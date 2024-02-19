@@ -374,7 +374,8 @@ snowapp.layout = html.Div([
         html.Div([
             dcc.Graph(id="snow-station-graph",
                 config={
-                    'modeBarButtonsToRemove': ['zoom2d', 'pan2d', 'autoScale2d']
+                    'modeBarButtonsToRemove': ['zoom2d', 'pan2d', 'autoScale2d'],
+                    'modeBarButtonsToAdd': ['v1hovermode'],
                 }
             ),       
         ], className='eight columns'),
