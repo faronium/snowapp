@@ -18,6 +18,7 @@ from dash import Dash, html, dcc, Input, Output, callback
 import plotly.graph_objects as go
 from datetime import datetime
 from documentation import documentationmd
+from map import draw_station_map
 
 '''
 Author: Faron Anslow
@@ -296,16 +297,14 @@ def get_oni_startrange(mnxonidata):
 
 df['hydrodoy'] = hydrodoy_from_timestamp(df.index.to_series())
 df['hydrological_year'] = wateryear_from_timestamps(df.index.to_series())
-fillninoarea = 'rgba(255,110,95,0.3)'
-fillninoline = 'rgb(255,110,95)'
-fillninaarea = 'rgba(0,175,245,0.3)'
-fillninaline = 'rgb(0,175,245)'
-maxdayidx = 321
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 mnxonidata = get_wyear_extrema_oni()
 startrange = get_oni_startrange(mnxonidata)
 currentyear = df[['hydrological_year']].max()
-token = open(".mapbox_token").read()
+fillninoarea = 'rgba(255,110,95,0.3)'
+fillninoline = 'rgb(255,110,95)'
+fillninaarea = 'rgba(0,175,245,0.3)'
+fillninaline = 'rgb(0,175,245)'
 snowapp = Dash(__name__, 
                   external_stylesheets=external_stylesheets,
                   title='ENSO Snow BC: exploring snow accumulation and El Nino/La Nina in British Columbia'
@@ -398,48 +397,7 @@ def make_station_map(reccheck):
         #Only keep stations that have 30 or more years of complete records.
         locdfuse = locdfuse.loc[(locdfuse['LCTN_ID'] + ' ' + locdfuse['LCTN_NM']).isin(pd.Series(nyears_complete.index[nyears_complete >= 20])),:]
     
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scattermapbox(
-            lon = locdfuse['LONGITUDE'],
-            lat = locdfuse['LATITUDE'],
-            text = locdfuse['text'],
-            mode = 'markers',
-            marker=go.scattermapbox.Marker(
-                size = 16,
-                color = 'rgba(0,175,245,0.7)',     #locdf['ELEVATION'],
-                #line_color='rgb(40,40,40,0.5)',
-                #line_width=0.5,                    #colorscale = 'earth'
-            ),
-            selected = go.scattermapbox.Selected(
-                marker = {
-                    'size': 26,
-                    'color': 'rgba(255,110,95,0.99)',
-                }
-            ),
-        )
-    )
-    fig.update_layout(
-        #title_text = 'test snow sites',
-        clickmode = 'event+select',
-        mapbox = {
-            'accesstoken': token,
-            'style': 'outdoors',
-            'zoom': 3,
-            'center': go.layout.mapbox.Center(
-                         lat=54.5,
-                         lon=-126
-                      ),
-        },
-     )
-    fig.update_layout(
-        margin = dict(l=0, r=0, b=0, t=0),
-        mapbox_bounds = {"west": -142, "east": -110, "south": 45, "north": 63},
-        #width=600, 
-        #height=600
-    )
-    #fig.update_traces(cluster=dict(enabled=True))
-    return fig
+    return draw_station_map(go,locdfuse)
 
 #Now make a callback that uses the values from the drop down and the slider selection to stratify the 
 #data and make the plot
@@ -450,6 +408,7 @@ def make_station_map(reccheck):
     Input('snow-station-map', 'clickData'),
 )
 def update_line_chart(onirange,clickData):
+    maxdayidx = 321
     #Here's what the clickData look like: 
     #{'points': [{
     #   'curveNumber': 0,
@@ -468,16 +427,22 @@ def update_line_chart(onirange,clickData):
     #]
     #}
     #
-    #subdf = df[[stationname,'hydrological_year','hydrodoy']]
     stnname = clickData['points'][0]['text'].split('<br>')[0]
-    subdf = pd.pivot_table(df[[stnname,'hydrological_year','hydrodoy']],index=["hydrodoy"],columns="hydrological_year",values=stnname)
+    subdf = pd.pivot_table(
+                df[[stnname,'hydrological_year','hydrodoy']],
+                index=["hydrodoy"],
+                columns="hydrological_year",
+                values=stnname
+            )
     if any(currentyear.isin(subdf.columns)):
         station_is_active = True
+        statoffset=1
     else:
         station_is_active = False
-
+        statoffset=0
+    nyears = (len(subdf.columns))
     #Can probably replace the two-line calculation of min with a more complex where or mask statement
-    subdf['min'] = subdf.median(axis=1) - subdf.std(axis=1)
+    subdf['min'] = subdf.iloc[:,0:(nyears-statoffset)].median(axis=1) - subdf.iloc[:,0:(nyears-statoffset)].std(axis=1)
     subdf.loc[(subdf['min'] < 0),'min'] = 0
     #Need to set the min and max range values to zero where they drop to negative snow amounts
     if ((onirange[0] + onirange[1])/2 > 0):
@@ -491,46 +456,50 @@ def update_line_chart(onirange,clickData):
         (mnxonidata["ANOM"] < onirange[1])].unique()
     yearsavail = subdf.columns[subdf.columns.isin(yearsuse)]
     filtereddf = subdf.loc[:,yearsavail]
+    nyearssub = len(filtereddf.columns)
     #Can probably replace the two-line calculation of min with a more complex where or mask statement
-    filtereddf['min'] = filtereddf.median(axis=1) - filtereddf.std(axis=1)
+    filtereddf['min'] = filtereddf.iloc[:,0:(nyearssub-statoffset)].median(axis=1) - filtereddf.iloc[:,0:(nyearssub-statoffset)].std(axis=1)
     filtereddf.loc[(filtereddf['min'] < 0 ),'min'] = 0
     #Need to set the min and max range values to zero where they drop to negative snow amounts
     fig = go.Figure()
     #These next four add_trace/go.Scatter calls/objects build the median and range lines/area plots. 
     #Range for the full dataset.
-    fig.add_trace(go.Scatter(
-        x=pd.concat([subdf.index.to_series()[0:maxdayidx],subdf.index.to_series()[maxdayidx:0:-1]]),
-        y=pd.concat([subdf.loc[0:maxdayidx,'min'],(subdf.median(axis=1) + subdf.std(axis=1))[maxdayidx:0:-1]]),
-        fill='toself',
-        fillcolor='rgba(100,100,100,0.2)',
-        line_color='rgba(255,255,255,0)',
-        legendgroup='fullrecord',
-        showlegend=True,
-        name='Range'
-    ))
+    #Only plot ranges if more than 5 years of record
+    if nyears >= 5:
+        fig.add_trace(go.Scatter(
+            x=pd.concat([subdf.index.to_series()[0:maxdayidx],subdf.index.to_series()[maxdayidx:0:-1]]),
+            y=pd.concat([subdf.loc[0:maxdayidx,'min'],(subdf.iloc[:,0:(nyears-statoffset)].median(axis=1) + subdf.iloc[:,0:(nyears-statoffset)].std(axis=1))[maxdayidx:0:-1]]),
+            fill='toself',
+            fillcolor='rgba(100,100,100,0.2)',
+            line_color='rgba(255,255,255,0)',
+            legendgroup='fullrecord',
+            showlegend=True,
+            name='Range'
+        ))
     #Median for the full dataset
     fig.add_trace(go.Scatter(
         x=subdf.index[0:maxdayidx], 
-        y=subdf.median(axis=1)[0:maxdayidx],
+        y=subdf.iloc[:,0:(nyears-statoffset)].median(axis=1)[0:maxdayidx],
         line_color='rgb(100,100,100)',
         legendgroup='fullrecord',
         name='Median'
     ))
-    #Range for the ENSO subset of the data.
-    fig.add_trace(go.Scatter(
-        x=pd.concat([subdf.index.to_series()[0:maxdayidx],subdf.index.to_series()[maxdayidx:0:-1]]),
-        y=pd.concat([filtereddf.loc[0:maxdayidx,'min'],(filtereddf.median(axis=1) + filtereddf.std(axis=1))[maxdayidx:0:-1]]),
-        fill='toself',
-        fillcolor=fillarea,
-        line_color='rgba(255,255,255,0)',
-        legendgroup='onisub',
-        showlegend=True,
-        name='Selected Range'
-    ))
+    if nyearssub >= 5:
+        #Range for the ENSO subset of the data.
+        fig.add_trace(go.Scatter(
+            x=pd.concat([subdf.index.to_series()[0:maxdayidx],subdf.index.to_series()[maxdayidx:0:-1]]),
+            y=pd.concat([filtereddf.loc[0:maxdayidx,'min'],(filtereddf.iloc[:,0:(nyearssub-statoffset)].median(axis=1) + filtereddf.iloc[:,0:(nyearssub-statoffset)].std(axis=1))[maxdayidx:0:-1]]),
+            fill='toself',
+            fillcolor=fillarea,
+            line_color='rgba(255,255,255,0)',
+            legendgroup='onisub',
+            showlegend=True,
+            name='Selected Range'
+        ))
     #Median for the ENSO subset of the data.
     fig.add_trace(go.Scatter(
         x=subdf.index[0:maxdayidx],
-        y=filtereddf.median(axis=1)[0:maxdayidx],
+        y=filtereddf.iloc[:,0:(nyearssub-statoffset)].median(axis=1)[0:maxdayidx],
         line_color=fillline,
         legendgroup='onisub',
         name='Selected Median'
@@ -602,8 +571,5 @@ def update_line_chart(onirange,clickData):
     return fig
 
 if __name__ == '__main__':
-    snowapp.run(debug=False)
-
-
-
+    snowapp.run(debug=True)
 
