@@ -571,5 +571,5 @@ def update_line_chart(onirange,clickData):
     return fig
 
 if __name__ == '__main__':
-    snowapp.run(debug=True)
+    snowapp.run(debug=False)
 
