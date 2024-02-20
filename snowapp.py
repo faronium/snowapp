@@ -18,6 +18,7 @@ from dash import Dash, html, dcc, Input, Output, callback
 import plotly.graph_objects as go
 from datetime import datetime
 from documentation import documentationmd
+from map import draw_station_map
 
 '''
 Author: Faron Anslow
@@ -296,17 +297,14 @@ def get_oni_startrange(mnxonidata):
 
 df['hydrodoy'] = hydrodoy_from_timestamp(df.index.to_series())
 df['hydrological_year'] = wateryear_from_timestamps(df.index.to_series())
-fillninoarea = 'rgba(255,110,95,0.3)'
-fillninoline = 'rgb(255,110,95)'
-fillninaarea = 'rgba(0,175,245,0.3)'
-fillninaline = 'rgb(0,175,245)'
-maxdayidx = 321
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 mnxonidata = get_wyear_extrema_oni()
 startrange = get_oni_startrange(mnxonidata)
 currentyear = df[['hydrological_year']].max()
-token = open(".mapbox_token").read()
-
+fillninoarea = 'rgba(255,110,95,0.3)'
+fillninoline = 'rgb(255,110,95)'
+fillninaarea = 'rgba(0,175,245,0.3)'
+fillninaline = 'rgb(0,175,245)'
 snowapp = Dash(__name__, 
                   external_stylesheets=external_stylesheets,
                   title='ENSO Snow BC: exploring snow accumulation and El Nino/La Nina in British Columbia'
@@ -399,48 +397,7 @@ def make_station_map(reccheck):
         #Only keep stations that have 30 or more years of complete records.
         locdfuse = locdfuse.loc[(locdfuse['LCTN_ID'] + ' ' + locdfuse['LCTN_NM']).isin(pd.Series(nyears_complete.index[nyears_complete >= 20])),:]
     
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scattermapbox(
-            lon = locdfuse['LONGITUDE'],
-            lat = locdfuse['LATITUDE'],
-            text = locdfuse['text'],
-            mode = 'markers',
-            marker=go.scattermapbox.Marker(
-                size = 16,
-                color = 'rgba(0,175,245,0.7)',     #locdf['ELEVATION'],
-                #line_color='rgb(40,40,40,0.5)',
-                #line_width=0.5,                    #colorscale = 'earth'
-            ),
-            selected = go.scattermapbox.Selected(
-                marker = {
-                    'size': 26,
-                    'color': 'rgba(255,110,95,0.99)',
-                }
-            ),
-        )
-    )
-    fig.update_layout(
-        #title_text = 'test snow sites',
-        clickmode = 'event+select',
-        mapbox = {
-            'accesstoken': token,
-            'style': 'outdoors',
-            'zoom': 3,
-            'center': go.layout.mapbox.Center(
-                         lat=54.5,
-                         lon=-126
-                      ),
-        },
-     )
-    fig.update_layout(
-        margin = dict(l=0, r=0, b=0, t=0),
-        mapbox_bounds = {"west": -142, "east": -110, "south": 45, "north": 63},
-        #width=600, 
-        #height=600
-    )
-    #fig.update_traces(cluster=dict(enabled=True))
-    return fig
+    return draw_station_map(go,locdfuse)
 
 #Now make a callback that uses the values from the drop down and the slider selection to stratify the 
 #data and make the plot
@@ -451,6 +408,7 @@ def make_station_map(reccheck):
     Input('snow-station-map', 'clickData'),
 )
 def update_line_chart(onirange,clickData):
+    maxdayidx = 321
     #Here's what the clickData look like: 
     #{'points': [{
     #   'curveNumber': 0,
@@ -469,14 +427,18 @@ def update_line_chart(onirange,clickData):
     #]
     #}
     #
-    #subdf = df[[stationname,'hydrological_year','hydrodoy']]
     stnname = clickData['points'][0]['text'].split('<br>')[0]
-    subdf = pd.pivot_table(df[[stnname,'hydrological_year','hydrodoy']],index=["hydrodoy"],columns="hydrological_year",values=stnname)
+    subdf = pd.pivot_table(
+                df[[stnname,'hydrological_year','hydrodoy']],
+                index=["hydrodoy"],
+                columns="hydrological_year",
+                values=stnname
+            )
     if any(currentyear.isin(subdf.columns)):
         station_is_active = True
     else:
         station_is_active = False
-
+    print(len(subdf.columns))
     #Can probably replace the two-line calculation of min with a more complex where or mask statement
     subdf['min'] = subdf.median(axis=1) - subdf.std(axis=1)
     subdf.loc[(subdf['min'] < 0),'min'] = 0
