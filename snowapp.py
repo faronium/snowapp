@@ -306,7 +306,6 @@ mnxonidata = get_wyear_extrema_oni()
 startrange = get_oni_startrange(mnxonidata)
 currentyear = df[['hydrological_year']].max()
 token = open(".mapbox_token").read()
-
 snowapp = Dash(__name__, 
                   external_stylesheets=external_stylesheets,
                   title='ENSO Snow BC: exploring snow accumulation and El Nino/La Nina in British Columbia'
