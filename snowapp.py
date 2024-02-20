@@ -436,11 +436,13 @@ def update_line_chart(onirange,clickData):
             )
     if any(currentyear.isin(subdf.columns)):
         station_is_active = True
+        statoffset=1
     else:
         station_is_active = False
-    print(len(subdf.columns))
+        statoffset=0
+    nyears = (len(subdf.columns))
     #Can probably replace the two-line calculation of min with a more complex where or mask statement
-    subdf['min'] = subdf.median(axis=1) - subdf.std(axis=1)
+    subdf['min'] = subdf.iloc[:,0:(nyears-statoffset)].median(axis=1) - subdf.iloc[:,0:(nyears-statoffset)].std(axis=1)
     subdf.loc[(subdf['min'] < 0),'min'] = 0
     #Need to set the min and max range values to zero where they drop to negative snow amounts
     if ((onirange[0] + onirange[1])/2 > 0):
@@ -454,46 +456,50 @@ def update_line_chart(onirange,clickData):
         (mnxonidata["ANOM"] < onirange[1])].unique()
     yearsavail = subdf.columns[subdf.columns.isin(yearsuse)]
     filtereddf = subdf.loc[:,yearsavail]
+    nyearssub = len(filtereddf.columns)
     #Can probably replace the two-line calculation of min with a more complex where or mask statement
-    filtereddf['min'] = filtereddf.median(axis=1) - filtereddf.std(axis=1)
+    filtereddf['min'] = filtereddf.iloc[:,0:(nyearssub-statoffset)].median(axis=1) - filtereddf.iloc[:,0:(nyearssub-statoffset)].std(axis=1)
     filtereddf.loc[(filtereddf['min'] < 0 ),'min'] = 0
     #Need to set the min and max range values to zero where they drop to negative snow amounts
     fig = go.Figure()
     #These next four add_trace/go.Scatter calls/objects build the median and range lines/area plots. 
     #Range for the full dataset.
-    fig.add_trace(go.Scatter(
-        x=pd.concat([subdf.index.to_series()[0:maxdayidx],subdf.index.to_series()[maxdayidx:0:-1]]),
-        y=pd.concat([subdf.loc[0:maxdayidx,'min'],(subdf.median(axis=1) + subdf.std(axis=1))[maxdayidx:0:-1]]),
-        fill='toself',
-        fillcolor='rgba(100,100,100,0.2)',
-        line_color='rgba(255,255,255,0)',
-        legendgroup='fullrecord',
-        showlegend=True,
-        name='Range'
-    ))
+    #Only plot ranges if more than 5 years of record
+    if nyears >= 5:
+        fig.add_trace(go.Scatter(
+            x=pd.concat([subdf.index.to_series()[0:maxdayidx],subdf.index.to_series()[maxdayidx:0:-1]]),
+            y=pd.concat([subdf.loc[0:maxdayidx,'min'],(subdf.iloc[:,0:(nyears-statoffset)].median(axis=1) + subdf.iloc[:,0:(nyears-statoffset)].std(axis=1))[maxdayidx:0:-1]]),
+            fill='toself',
+            fillcolor='rgba(100,100,100,0.2)',
+            line_color='rgba(255,255,255,0)',
+            legendgroup='fullrecord',
+            showlegend=True,
+            name='Range'
+        ))
     #Median for the full dataset
     fig.add_trace(go.Scatter(
         x=subdf.index[0:maxdayidx], 
-        y=subdf.median(axis=1)[0:maxdayidx],
+        y=subdf.iloc[:,0:(nyears-statoffset)].median(axis=1)[0:maxdayidx],
         line_color='rgb(100,100,100)',
         legendgroup='fullrecord',
         name='Median'
     ))
-    #Range for the ENSO subset of the data.
-    fig.add_trace(go.Scatter(
-        x=pd.concat([subdf.index.to_series()[0:maxdayidx],subdf.index.to_series()[maxdayidx:0:-1]]),
-        y=pd.concat([filtereddf.loc[0:maxdayidx,'min'],(filtereddf.median(axis=1) + filtereddf.std(axis=1))[maxdayidx:0:-1]]),
-        fill='toself',
-        fillcolor=fillarea,
-        line_color='rgba(255,255,255,0)',
-        legendgroup='onisub',
-        showlegend=True,
-        name='Selected Range'
-    ))
+    if nyearssub >= 5:
+        #Range for the ENSO subset of the data.
+        fig.add_trace(go.Scatter(
+            x=pd.concat([subdf.index.to_series()[0:maxdayidx],subdf.index.to_series()[maxdayidx:0:-1]]),
+            y=pd.concat([filtereddf.loc[0:maxdayidx,'min'],(filtereddf.iloc[:,0:(nyearssub-statoffset)].median(axis=1) + filtereddf.iloc[:,0:(nyearssub-statoffset)].std(axis=1))[maxdayidx:0:-1]]),
+            fill='toself',
+            fillcolor=fillarea,
+            line_color='rgba(255,255,255,0)',
+            legendgroup='onisub',
+            showlegend=True,
+            name='Selected Range'
+        ))
     #Median for the ENSO subset of the data.
     fig.add_trace(go.Scatter(
         x=subdf.index[0:maxdayidx],
-        y=filtereddf.median(axis=1)[0:maxdayidx],
+        y=filtereddf.iloc[:,0:(nyearssub-statoffset)].median(axis=1)[0:maxdayidx],
         line_color=fillline,
         legendgroup='onisub',
         name='Selected Median'
@@ -565,7 +571,7 @@ def update_line_chart(onirange,clickData):
     return fig
 
 if __name__ == '__main__':
-    snowapp.run(debug=False)
+    snowapp.run(debug=True)
 
 
 
