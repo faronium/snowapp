@@ -104,7 +104,6 @@ def how_to_md(dcc):
         can both be zoomed into to modify the range of what is plotted. Additional controls in the upper right of
         the graph alow one to download an image of the current plot, reset the axes or choose a graph
         selection method.
-        ___
         '''
     )
 
