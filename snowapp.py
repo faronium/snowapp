@@ -2,10 +2,10 @@
 # coding: utf-8
 
 # # Snow Data
-# 
+#
 # Tool to import archived snow data and manipulate it using python pandas. Eventually
 # to plot with plotlinkedinly/dash app of some kind.
-# 
+#
 
 # ## Importing the data
 
@@ -26,13 +26,13 @@ Author: Faron Anslow
 E-mail: faron.anslow@gmail.com
 
 This code generates a Dash web browser application that plots single station water-year snow evolution with
-controls to filter by station location and ENSO state. Default is to display the median and 1-sigma range 
+controls to filter by station location and ENSO state. Default is to display the median and 1-sigma range
 for the entire record, the median and 1-sigma range for a selected ENSO condition and the current year's
-snowpack evolution. 
+snowpack evolution.
 
 Future iterations will include a map-view component that will display the station locations with symbology
 that illustrates the relationship between various snow statistics (such as timing of peak, amplitude of peak,
-timing of peak melt, amplitude of peak melt and timing of snow loss) and seasonal teleconnection/variability 
+timing of peak melt, amplitude of peak melt and timing of snow loss) and seasonal teleconnection/variability
 patterns.
 
 Sources for snow data and teleconnection index values.
@@ -70,26 +70,26 @@ locdf = pd.read_csv('./snow/SNW_ASWS.csv')
 
 # ## Munging data to consistent timestamps and getting some useful indexes
 
-# 
-# Looks like there are stations that have data at a non-standard time of 16:00. Six stations that have data on the even hour at some point in their record. These are '1A02P McBride Upper', '1B02P Tahtsa Lake', '1B08P Mt. Pondosy', '2F18P Brenda Mine', '3A25P Squamish River Upper', '3A28P Tetrahedron'. In all of these stations, the hourly data is in addition to the data reported at 16:00. So, can safely drop all of the excess data without worry. 
-# 
-# 
+#
+# Looks like there are stations that have data at a non-standard time of 16:00. Six stations that have data on the even hour at some point in their record. These are '1A02P McBride Upper', '1B02P Tahtsa Lake', '1B08P Mt. Pondosy', '2F18P Brenda Mine', '3A25P Squamish River Upper', '3A28P Tetrahedron'. In all of these stations, the hourly data is in addition to the data reported at 16:00. So, can safely drop all of the excess data without worry.
+#
+#
 
 # In[4]:
 
 
 #Deal with the non-daily observations. Most are on the 16:00, some are on the 00:00 and others are on the even hour.
 #plt.close("all")
-#Set the rows with hours != 16:00 to NaN for stations '1A02P McBride Upper', '1B02P Tahtsa Lake', '1B08P Mt. Pondosy', '2F18P Brenda Mine', 
+#Set the rows with hours != 16:00 to NaN for stations '1A02P McBride Upper', '1B02P Tahtsa Lake', '1B08P Mt. Pondosy', '2F18P Brenda Mine',
 #         '3A25P Squamish River Upper', '3A28P Tetrahedron']
 df.loc[df.index.strftime('%H').isin(['00','01','02','03','04','05','06','07','08','09','10','11',
         '12','13','14','15','17','18','19','20','21','22','23']),
-        ['1A02P McBride Upper', '1B02P Tahtsa Lake', '1B08P Mt. Pondosy', '2F18P Brenda Mine', 
+        ['1A02P McBride Upper', '1B02P Tahtsa Lake', '1B08P Mt. Pondosy', '2F18P Brenda Mine',
          '3A25P Squamish River Upper', '3A28P Tetrahedron']] = np.nan
 
 
-# 
-# Additionally, the stations '4D16P Forrest Kerr Mid Elevation Snow', '4D17P Forrest Kerr High Elevation Snow' have data on the 00:00. These also appear not to have data on the 16:00. So, perhaps we can simply move those timestamps by the 16 hours to make them 
+#
+# Additionally, the stations '4D16P Forrest Kerr Mid Elevation Snow', '4D17P Forrest Kerr High Elevation Snow' have data on the 00:00. These also appear not to have data on the 16:00. So, perhaps we can simply move those timestamps by the 16 hours to make them
 
 # In[5]:
 
@@ -99,9 +99,9 @@ dfsub = dfsub.dropna(axis=0,how='all')
 dfsub.index += pd.Timedelta("16 hours")
 
 
-# 
-# Now simply merge the two data frames into a master data frame that only has the data we want. 
-# 
+#
+# Now simply merge the two data frames into a master data frame that only has the data we want.
+#
 
 # In[6]:
 
@@ -130,20 +130,20 @@ datastnnames = datastnnames[datastnids.isin(metastnids)]
 datastnids = datastnids[datastnids.isin(metastnids)]
 metastnids = metastnids[metastnids.isin(datastnids)]
 
-#re-subset the dataframes so that the 
+#re-subset the dataframes so that the
 df.loc[:,(datastnids+' '+datastnnames)]
 locdf = locdf.loc[locdf['LCTN_ID'].isin(metastnids),:]
 
-#Okay, so now we have parity in the location station ids. Have to rebuild the data column name 
-#and then select only the data columns 
+#Okay, so now we have parity in the location station ids. Have to rebuild the data column name
+#and then select only the data columns
 #locdf.head()
 locdf['text'] = locdf['LCTN_ID'] + ' ' + locdf['LCTN_NM'] + '<br>Elevation: ' + (locdf['ELEVATION']).astype(str)
 
 
-# 
+#
 # Make a column formatted that gives the hydrological year. Essentially the time index, forward by 3 months,
 # then reformatted to %Y using strftime.
-# 
+#
 
 # In[9]:
 
@@ -154,11 +154,11 @@ def hydrodoy_from_timestamp(timestamps):
     """
     This function takes a pandas data Series object of timestamps and converts it into the day of the hydrological
     year which starts on 1 October and runs through the end of September. Returns a pandas Series of those days of year.
-    
+
     Leap years are accommodated in an ugly way through making masks on the vector. I'm sure there are more elegant ways
     of doing this!
     """
-    #Calculating the julian day is the first, necessary step. 
+    #Calculating the julian day is the first, necessary step.
     hydrodoy = timestamps.apply(datetimepandas,args=('%j',)).astype(int)
     #Next, need to link logic to operate one way for years where YEAR % 4 == 0 and anotherway for years where YEAR % 4 ~= 0
     leapmask = timestamps.apply(datetime.strftime,args=('%Y',)).astype(int) % 4 == 0
@@ -172,7 +172,7 @@ def hydrodoy_from_timestamp(timestamps):
 def wateryear_from_timestamps(timestamps):
     """
     This function takes a pandas data Series object of timestamps and determines the hydrological year the date
-    belongs to. Essentially, has to look at the year 92 days in the future. 
+    belongs to. Essentially, has to look at the year 92 days in the future.
 
     Needs error trapping or at least some type checking.
     """
@@ -185,14 +185,14 @@ def wateryear_from_timestamps(timestamps):
 
 
 
-# 
+#
 # Make a column formatted that gives the hydrological year. Essentially the time index, forward by 3 months,
 # then reformatted to %Y using strftime.
-# 
+#
 
 # ## Station Snow Statistics
-# 
-# Interested in being able to correlate ENSO with timing of peak snow and amount of snow at the peak. Also interested in magnitude of peak melt rate and timing of the peak melt rate. These satistics will be part of a map-based view of the station data that will be colourized by the level of correlation or by the percent of peak snow associated with the 
+#
+# Interested in being able to correlate ENSO with timing of peak snow and amount of snow at the peak. Also interested in magnitude of peak melt rate and timing of the peak melt rate. These satistics will be part of a map-based view of the station data that will be colourized by the level of correlation or by the percent of peak snow associated with the
 df['hydrodoy'] = hydrodoy_from_timestamp(df.index.to_series())
 df['hydrological_year'] = wateryear_from_timestamps(df.index.to_series())
 #df.columns
@@ -216,10 +216,10 @@ nyears_complete = (df.groupby(by="hydrological_year").apply(count_coverage)*100/
 peak_annual_snow = df.groupby(by="hydrological_year").apply(max)
 
 #Now get stations with some chosen common period of record. Preferably this will be a subset of the stations with current
-#and stations with more than x number of years. 
+#and stations with more than x number of years.
 
 
-# 
+#
 # Need to bring in the monthly ENSO data. We'll probably use the Oceanic Nino Index for this.
 # May want to alternatively or additionally bring in the monthly PNA and use some form of season-averaged PNA as
 # a stratifire for snow. Should be more directly applicable to snow pack as it covaries with ENSO/is driven by it.
@@ -238,11 +238,11 @@ def get_wyear_extrema_oni():
 
 
     #Issue here is that the selector finds the years where the ONI range was met, but needs
-    #To identify the peak ONI values during the snow year. 
+    #To identify the peak ONI values during the snow year.
     mnxonidata = onidata.groupby(['YR']).min()
     mnxonidata['MAX_ANOM'] = onidata.groupby(['YR']).max()['ANOM']
     mnxonidata = mnxonidata.rename(columns={'ANOM':'MIN_ANOM'})
-    #Three cases: 
+    #Three cases:
     #         1) where the min anom and the max anom are both negative, keep the min anom
     #         2) where the max anom and the min anom are both positive, keep the max anom
     #         3) where the min anom is negative and the max anom is positive, keep the largest
@@ -368,9 +368,7 @@ snowapp.layout = html.Div([
             )
         ]
     ),
-    #html.Div([
-        footer_text_md(dcc),
-    #])
+    footer_text_md(dcc),
 ])
 
 @snowapp.callback(
@@ -409,18 +407,18 @@ def update_line_chart(onirange,clickData):
     Then calls a subfunction to create the actual map.
     '''
     maxdayidx = 321
-    #Here's what the clickData look like: 
+    #Here's what the clickData look like:
     #{'points': [{
     #   'curveNumber': 0,
-    #   'pointNumber': 123, 
-    #   'pointIndex': 123, 
-    #   'lon': -128.711028, 
-    #   'lat': 55.152028, 
-    #   'text': '4B18P Cedar-Kiteen<br>Elevation: 885.0', 
+    #   'pointNumber': 123,
+    #   'pointIndex': 123,
+    #   'lon': -128.711028,
+    #   'lat': 55.152028,
+    #   'text': '4B18P Cedar-Kiteen<br>Elevation: 885.0',
     #   'bbox': {
-    #        'x0': 76.35033446674115, 
-    #        'x1': 78.35033446674115, 
-    #        'y0': 1802.8100327553746, 
+    #        'x0': 76.35033446674115,
+    #        'x1': 78.35033446674115,
+    #        'y0': 1802.8100327553746,
     #        'y1': 1804.8100327553746
     #   }
     #}
