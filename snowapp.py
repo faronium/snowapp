@@ -17,7 +17,7 @@ import numpy as np
 from dash import Dash, html, dcc, Input, Output, callback
 import plotly.graph_objects as go
 from datetime import datetime
-from documentation import documentationmd
+from documentation import how_to_md, analysis_desc_md, header_text_md, footer_text_md
 from map import draw_station_map
 from snowplot import snow_lineplot
 
@@ -49,8 +49,8 @@ df = pd.read_csv('./snow/SW_DailyArchive.csv',index_col=[0],parse_dates=[0]) #He
 
 
 
-dffresh = pd.read_csv('./snow/SWDaily.csv',index_col=[0],parse_dates=[0])
-#dffresh = pd.read_csv('https://www.env.gov.bc.ca/wsd/data_searches/snow/asws/data/SWDaily.csv',index_col=[0],parse_dates=[0])
+#dffresh = pd.read_csv('./snow/SWDaily.csv',index_col=[0],parse_dates=[0])
+dffresh = pd.read_csv('https://www.env.gov.bc.ca/wsd/data_searches/snow/asws/data/SWDaily.csv',index_col=[0],parse_dates=[0])
 df = pd.concat([df,dffresh],axis=0)
 #Check current data for entries with all na/no data
 if (dffresh.isna().sum() == len(dffresh)).any():
@@ -229,8 +229,8 @@ peak_annual_snow = df.groupby(by="hydrological_year").apply(max)
 
 #Import oceanic Nino index and massage into a form that allows selection by ENSO strength
 def get_wyear_extrema_oni():
-    #onidata = pd.read_fwf('https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt')
-    onidata = pd.read_fwf('./snow/oni.ascii.txt')
+    onidata = pd.read_fwf('https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt')
+    #onidata = pd.read_fwf('./snow/oni.ascii.txt')
     oniseaslist = list(['OND','NDJ','DJF','JFM','FMA','MAM'])
     onidata = onidata[onidata['SEAS'].isin(oniseaslist)]
     #Need to add a year to the OND and NDJ seasoned years to correspond to the hydrological year that ENSO cycle belongs to.
@@ -268,11 +268,9 @@ def get_oni_startrange(mnxonidata):
 
 # ## Build the app
 
-df['hydrodoy'] = hydrodoy_from_timestamp(df.index.to_series())
-df['hydrological_year'] = wateryear_from_timestamps(df.index.to_series())
-external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 mnxonidata = get_wyear_extrema_oni()
 startrange = get_oni_startrange(mnxonidata)
+external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 currentyear = df[['hydrological_year']].max()
 fillninoarea = 'rgba(255,110,95,0.3)'
 fillninoline = 'rgb(255,110,95)'
@@ -285,73 +283,94 @@ snowapp = Dash(__name__,
 server = snowapp.server
 snowapp.layout = html.Div([
     #Call the function to produce the documentation using dcc.markdown
-    documentationmd(dcc),
-    html.Div(className='row', children=[
-        html.Div([
-            #Want to implement a checklist here that allows for the selection of one or more of three
-            #things
-            #
-            #1) Want to allow restriction to long records only
-            #2) Want to allow restriction to records with current year only
-            #3) Want an option to show only locations with data in an overlapping 30 years
-            #   normal period or restricted normal period. 1991 -- 2020 or 2000
-            #   to 2020 ideally and restrict the stats to those.
-            #
-            #This is never going to be simple as we'll have to decide if these combine and how they combine.
-            #So, this might be best achieved with three binaries. i.e. restrict to stations with this year's data yes/no
-            dcc.Checklist(
-                options=[
-                    {'label': 'Require current year?', 'value': 'rcy'},
-                    {'label': 'Require 20 or more years?', 'value': 'rtmy'},
-                #    {'label': 'Require current normal preiod', 'value': 'rcnp'},
-                ],
-                value=['rcy'],
-                #inline=True,
-                id='record-length-current-check',
+    header_text_md(dcc),
+    dcc.Tabs(
+        children=[
+            dcc.Tab(
+                label='ENSO Snow BC',
+                children=[
+                    html.Div(className='row', children=[
+                        html.Div([
+                        #Want to implement a checklist here that allows for the selection of one or more of three
+                        #things
+                        #
+                        #1) Want to allow restriction to long records only
+                        #2) Want to allow restriction to records with current year only
+                        #3) Want an option to show only locations with data in an overlapping 30 years
+                        #   normal period or restricted normal period. 1991 -- 2020 or 2000
+                        #   to 2020 ideally and restrict the stats to those.
+                        dcc.Checklist(
+                            options=[
+                                {'label': 'Require current year?', 'value': 'rcy'},
+                                {'label': 'Require 20 or more years?', 'value': 'rtmy'},
+                            #    {'label': 'Require current normal preiod', 'value': 'rcnp'},
+                            ],
+                            value=['rcy'],
+                            #inline=True,
+                            id='record-length-current-check',
+                        )
+                    ], className='four columns',),
+                    html.Div([
+                    html.P("Filter by La Niña/El Niño Strength:"),
+                    dcc.RangeSlider(
+                        min=-3,
+                        max=3,
+                        step=0.1,
+                        #Range slider with custom marks.
+                        marks={
+                            -2.7: {'label': 'Extreme La Niña', 'style': {'color': fillninaline}},
+                            -1.3: {'label': 'Mod. La Niña', 'style': {'color': fillninaline}},
+                            -0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
+                            0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
+                            1.3: {'label': 'Mod. El Niño', 'style': {'color': fillninoline}},
+                            2.7: {'label': 'Extreme El Niño', 'style': {'color': fillninoline}}
+                        },
+                        value=[startrange[0], startrange[1]],
+                        updatemode='drag',
+                        id='oni-range-slider'),
+                    ], className='eight columns',),
+                ]),
+                html.Div(className='row', children=[
+                    html.Div([
+                        dcc.Graph(
+                            id="snow-station-map",
+                            #This is the initil point to draw data for. Clunky way of assigning it...
+                            clickData={'points': [{'text': '3A25P Squamish River Upper<br>Elevation: 1360.0'}]},
+                            #Get rid of the selection buttons in the map because they will confuse with
+                            #The select on click action that's desired.
+                            config={
+                                'modeBarButtonsToRemove': ['pan2d', 'lasso2d', 'select2d']
+                            }
+                        ),
+                    ], className='four columns',),
+                    html.Div([
+                        dcc.Graph(id="snow-station-graph",
+                            config={
+                                'modeBarButtonsToRemove': ['zoom2d', 'pan2d', 'autoScale2d'],
+                                'modeBarButtonsToAdd': ['v1hovermode'],
+                            }
+                        ),
+                    ], className='eight columns'),
+                ]),
+                ]
+            ),
+            dcc.Tab(
+                label='Analysis',
+                children=[
+                    analysis_desc_md(dcc),
+                ]
+            ),
+            dcc.Tab(
+                label='Help',
+                children=[
+                    how_to_md(dcc),
+                ]
             )
-        ], className='four columns',),
-        html.Div([
-        html.P("Filter by La Niña/El Niño Strength:"),
-        dcc.RangeSlider(
-            min=-3,
-            max=3,
-            step=0.1,
-            #Range slider with custom marks.
-            marks={
-                -2.7: {'label': 'Extreme La Niña', 'style': {'color': fillninaline}},
-                -1.3: {'label': 'Mod. La Niña', 'style': {'color': fillninaline}},
-                -0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
-                0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
-                1.3: {'label': 'Mod. El Niño', 'style': {'color': fillninoline}},
-                2.7: {'label': 'Extreme El Niño', 'style': {'color': fillninoline}}
-            },
-            value=[startrange[0], startrange[1]],
-            updatemode='drag',
-            id='oni-range-slider'),
-        ], className='eight columns',),
-    ]),
-    html.Div(className='row', children=[
-        html.Div([
-            dcc.Graph(
-                id="snow-station-map",
-                #This is the initil point to draw data for. Clunky way of assigning it...
-                clickData={'points': [{'text': '3A25P Squamish River Upper<br>Elevation: 1360.0'}]},
-                #Get rid of the selection buttons in the map because they will confuse with
-                #The select on click action that's desired.
-                config={
-                    'modeBarButtonsToRemove': ['pan2d', 'lasso2d', 'select2d']
-                }
-            ),
-        ], className='four columns',),
-        html.Div([
-            dcc.Graph(id="snow-station-graph",
-                config={
-                    'modeBarButtonsToRemove': ['zoom2d', 'pan2d', 'autoScale2d'],
-                    'modeBarButtonsToAdd': ['v1hovermode'],
-                }
-            ),
-        ], className='eight columns'),
-    ])
+        ]
+    ),
+    #html.Div([
+        footer_text_md(dcc),
+    #])
 ])
 
 @snowapp.callback(
@@ -438,4 +457,4 @@ def update_line_chart(onirange,clickData):
     )
 
 if __name__ == '__main__':
-    snowapp.run(debug=True)
+    snowapp.run(debug=False)
