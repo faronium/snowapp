@@ -7,7 +7,6 @@ def header_text_md(dcc):
         of the El Niño Southern Oscillation (ENSO) and this relationship translates to variability
         in the province's snowpack from year to year. This app allows the exploration of that
         relationship between snow accumulation and ENSO in the province of British Columbia.
-        ___
         '''
         )
 
