@@ -17,8 +17,9 @@ import numpy as np
 from dash import Dash, html, dcc, Input, Output, callback
 import plotly.graph_objects as go
 from datetime import datetime
-from documentation import documentationmd
+from documentation import how_to_md, analysis_desc_md, header_text_md, footer_text_md
 from map import draw_station_map
+from snowplot import snow_lineplot
 
 '''
 Author: Faron Anslow
@@ -265,130 +266,124 @@ def get_oni_startrange(mnxonidata):
     else:
         return [-0.5,0.5]
 
-#testname = '2F05P Mission Creek'
-#currentyear = df[['hydrological_year']].max()
-#index = pd.MultiIndex.from_frame(df[['hydrological_year','hydrodoy']])
-#subdf = df[[testname,'hydrological_year','hydrodoy']]
-#subdf
-#subdf_pivoted = pd.pivot_table(subdf,index=["hydrodoy"],columns="hydrological_year",values= testname)
-#subdf_pivoted.describe()
-#onirange = list([-3,3])
-#To identify the peak ONI values during the snow year. 
-#yearsuse = mnxonidata.index[(mnxonidata["ANOM"] >= onirange[0]) & 
-#    (mnxonidata["ANOM"] <= onirange[1])].unique()
-#filtereddf = subdf_pivoted.loc[:,subdf_pivoted.columns.isin(yearsuse)]
-#yearsavail = subdf_pivoted.columns[subdf_pivoted.columns.isin(yearsuse)]
-#currentyear[0]
-#filtereddf['median'] = filtereddf.median(axis=1)
-#filtereddf['min'] = filtereddf['median'] - filtereddf.std(axis=1)
-#filtereddf.loc[(filtereddf['min'] < 0 ),'min'] = 0
-#filtereddf['max'] = filtereddf['median'] + filtereddf.std(axis=1)
-#Sample plotting
-#subdf_pivoted.iloc[:,0:len(subdf_pivoted.columns)-1]
-#subdf_pivoted.loc[0:289,:].plot(xlabel='Hydrological Day of the Year', ylabel='Snow Water Equivalent (mm)')
-
-
 # ## Build the app
-# 
-# Okay, the daily snow water equivalent data are munged into a form that is relatively clean and useful and we have the tools to stratify the data by year, hydrological day of the year and station. Time to build the app. We want a simple layout that has a snow station selector at the top along with an ENSO strength slider with La Nina max on the left and El Nino max on the right. Perhaps most ideal would be slider with two tabs that alows the picking of a max and a min ONI value. Will have to think about this. 
 
-# In[50]:
-
-
-df['hydrodoy'] = hydrodoy_from_timestamp(df.index.to_series())
-df['hydrological_year'] = wateryear_from_timestamps(df.index.to_series())
-external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 mnxonidata = get_wyear_extrema_oni()
 startrange = get_oni_startrange(mnxonidata)
+external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 currentyear = df[['hydrological_year']].max()
 fillninoarea = 'rgba(255,110,95,0.3)'
 fillninoline = 'rgb(255,110,95)'
 fillninaarea = 'rgba(0,175,245,0.3)'
 fillninaline = 'rgb(0,175,245)'
-snowapp = Dash(__name__, 
-                  external_stylesheets=external_stylesheets,
-                  title='ENSO Snow BC: exploring snow accumulation and El Nino/La Nina in British Columbia'
+snowapp = Dash(__name__,
+                  external_stylesheets = external_stylesheets,
+                  title = 'ENSO Snow BC: exploring snow accumulation and El Nino/La Nina in British Columbia'
               )
 server = snowapp.server
 snowapp.layout = html.Div([
     #Call the function to produce the documentation using dcc.markdown
-    documentationmd(dcc),
-    html.Div(className='row', children=[
-        html.Div([
-            #Want to implement a checklist here that allows for the selection of one or more of three
-            #things
-            #
-            #1) Want to allow restriction to long records only
-            #2) Want to allow restriction to records with current year only
-            #3) Want an option to show only locations with data in an overlapping normal period
-            #    or restricted normal period. 1991 -- 2020 or 2000 to 2020 ideally and restrict the stats to those.
-            #
-            #This is never going to be simple as we'll have to decide if these combine and how they combine.
-            #So, this might be best achieved with three binaries. i.e. restrict to stations with this year's data yes/no
-            dcc.Checklist(
-                options=[
-                    {'label': 'Require current year?', 'value': 'rcy'},
-                    {'label': 'Require 20 or more years?', 'value': 'rtmy'},
-                #    {'label': 'Require current normal preiod', 'value': 'rcnp'},
-                ],
-                value=['rcy'],
-                #inline=True,
-                id='record-length-current-check',
-            )
-        ], className='four columns',),
-        html.Div([
-        html.P("Filter by La Niña/El Niño Strength:"),
-        dcc.RangeSlider(
-            min=-3,
-            max=3,
-            step=0.1,
-            #Range slider with custom marks.
-            marks={
-                -2.7: {'label': 'Extreme La Niña', 'style': {'color': fillninaline}},
-                -1.3: {'label': 'Mod. La Niña', 'style': {'color': fillninaline}},
-                -0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
-                0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
-                1.3: {'label': 'Mod. El Niño', 'style': {'color': fillninoline}},
-                2.7: {'label': 'Extreme El Niño', 'style': {'color': fillninoline}}
-            },
-            value=[startrange[0], startrange[1]],
-            updatemode='drag',
-            id='oni-range-slider'),
-        ], className='eight columns',),
-    ]),
-    html.Div(className='row', children=[
-        html.Div([
-            dcc.Graph(
-                id="snow-station-map",
-                #This is the initil point to draw data for. Clunky way of assigning it...
-                clickData={'points': [{'text': '3A25P Squamish River Upper<br>Elevation: 1360.0'}]},
-                #Get rid of the selection buttons in the map because they will confuse with
-                #The select on click action that's desired.
-                config={
-                    'modeBarButtonsToRemove': ['pan2d', 'lasso2d', 'select2d']
-                }
+    header_text_md(dcc),
+    dcc.Tabs(
+        children=[
+            dcc.Tab(
+                label='ENSO Snow BC',
+                children=[
+                    html.Div(className='row', children=[
+                        html.Div([
+                        #Want to implement a checklist here that allows for the selection of one or more of three
+                        #things
+                        #
+                        #1) Want to allow restriction to long records only
+                        #2) Want to allow restriction to records with current year only
+                        #3) Want an option to show only locations with data in an overlapping 30 years
+                        #   normal period or restricted normal period. 1991 -- 2020 or 2000
+                        #   to 2020 ideally and restrict the stats to those.
+                        dcc.Checklist(
+                            options=[
+                                {'label': 'Require current year?', 'value': 'rcy'},
+                                {'label': 'Require 20 or more years?', 'value': 'rtmy'},
+                            #    {'label': 'Require current normal preiod', 'value': 'rcnp'},
+                            ],
+                            value=['rcy'],
+                            #inline=True,
+                            id='record-length-current-check',
+                        )
+                    ], className='four columns',),
+                    html.Div([
+                    html.P("Filter by La Niña/El Niño Strength:"),
+                    dcc.RangeSlider(
+                        min=-3,
+                        max=3,
+                        step=0.1,
+                        #Range slider with custom marks.
+                        marks={
+                            -2.7: {'label': 'Extreme La Niña', 'style': {'color': fillninaline}},
+                            -1.3: {'label': 'Mod. La Niña', 'style': {'color': fillninaline}},
+                            -0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
+                            0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
+                            1.3: {'label': 'Mod. El Niño', 'style': {'color': fillninoline}},
+                            2.7: {'label': 'Extreme El Niño', 'style': {'color': fillninoline}}
+                        },
+                        value=[startrange[0], startrange[1]],
+                        updatemode='drag',
+                        id='oni-range-slider'),
+                    ], className='eight columns',),
+                ]),
+                html.Div(className='row', children=[
+                    html.Div([
+                        dcc.Graph(
+                            id="snow-station-map",
+                            #This is the initil point to draw data for. Clunky way of assigning it...
+                            clickData={'points': [{'text': '3A25P Squamish River Upper<br>Elevation: 1360.0'}]},
+                            #Get rid of the selection buttons in the map because they will confuse with
+                            #The select on click action that's desired.
+                            config={
+                                'modeBarButtonsToRemove': ['pan2d', 'lasso2d', 'select2d']
+                            }
+                        ),
+                    ], className='four columns',),
+                    html.Div([
+                        dcc.Graph(id="snow-station-graph",
+                            config={
+                                'modeBarButtonsToRemove': ['zoom2d', 'pan2d', 'autoScale2d'],
+                                'modeBarButtonsToAdd': ['v1hovermode'],
+                            }
+                        ),
+                    ], className='eight columns'),
+                ]),
+                ]
             ),
-        ], className='four columns',),
-        html.Div([
-            dcc.Graph(id="snow-station-graph",
-                config={
-                    'modeBarButtonsToRemove': ['zoom2d', 'pan2d', 'autoScale2d'],
-                    'modeBarButtonsToAdd': ['v1hovermode'],
-                }
-            ),       
-        ], className='eight columns'),
-    ])
+            dcc.Tab(
+                label='Analysis',
+                children=[
+                    analysis_desc_md(dcc),
+                ]
+            ),
+            dcc.Tab(
+                label='Help',
+                children=[
+                    how_to_md(dcc),
+                ]
+            )
+        ]
+    ),
+    #html.Div([
+        footer_text_md(dcc),
+    #])
 ])
 
 @snowapp.callback(
-    Output('snow-station-map', 'figure'), 
+    Output('snow-station-map', 'figure'),
     Input('record-length-current-check','value'),
 )
 def make_station_map(reccheck):
-    #So, we have 
-    #    stations_with_current_year, 
-    #    locdf with the station meta data, 
-    #    nyears_complete with the number of years of data
+    '''
+    Work with the record length checklist to filter the location data according to
+    what is available in the master dataframe. The argument reccheck is the list
+    of strings created as output by the checklist that indicates the logical
+    filters. If present, then true, if absent, no filter.
+    '''
     locdfuse = locdf
     if ('rcy' in reccheck):
         #Only keep stations with current year's data
@@ -396,18 +391,23 @@ def make_station_map(reccheck):
     if ('rtmy' in reccheck):
         #Only keep stations that have 30 or more years of complete records.
         locdfuse = locdfuse.loc[(locdfuse['LCTN_ID'] + ' ' + locdfuse['LCTN_NM']).isin(pd.Series(nyears_complete.index[nyears_complete >= 20])),:]
-    
+
     return draw_station_map(go,locdfuse)
 
-#Now make a callback that uses the values from the drop down and the slider selection to stratify the 
+#Now make a callback that uses the values from the drop down and the slider selection to stratify the
 #data and make the plot
 
 @snowapp.callback(
-    Output('snow-station-graph', 'figure'), 
+    Output('snow-station-graph', 'figure'),
     Input('oni-range-slider', 'value'),
     Input('snow-station-map', 'clickData'),
 )
 def update_line_chart(onirange,clickData):
+    '''
+    Function to take the output from the slider and the station map callbacks
+    and filter the master dataframe and the years according to the ONI magnitude
+    Then calls a subfunction to create the actual map.
+    '''
     maxdayidx = 321
     #Here's what the clickData look like: 
     #{'points': [{
@@ -434,142 +434,27 @@ def update_line_chart(onirange,clickData):
                 columns="hydrological_year",
                 values=stnname
             )
-    if any(currentyear.isin(subdf.columns)):
-        station_is_active = True
-        statoffset=1
-    else:
-        station_is_active = False
-        statoffset=0
-    nyears = (len(subdf.columns))
-    #Can probably replace the two-line calculation of min with a more complex where or mask statement
-    subdf['min'] = subdf.iloc[:,0:(nyears-statoffset)].median(axis=1) - subdf.iloc[:,0:(nyears-statoffset)].std(axis=1)
-    subdf.loc[(subdf['min'] < 0),'min'] = 0
-    #Need to set the min and max range values to zero where they drop to negative snow amounts
+    yearsuse = mnxonidata.index[(mnxonidata["ANOM"] > onirange[0]) &
+        (mnxonidata["ANOM"] < onirange[1])].unique()
     if ((onirange[0] + onirange[1])/2 > 0):
         fillarea = fillninoarea
         fillline = fillninoline
     else:
         fillarea = fillninaarea
         fillline = fillninaline
-    
-    yearsuse = mnxonidata.index[(mnxonidata["ANOM"] > onirange[0]) & 
-        (mnxonidata["ANOM"] < onirange[1])].unique()
-    yearsavail = subdf.columns[subdf.columns.isin(yearsuse)]
-    filtereddf = subdf.loc[:,yearsavail]
-    nyearssub = len(filtereddf.columns)
-    #Can probably replace the two-line calculation of min with a more complex where or mask statement
-    filtereddf['min'] = filtereddf.iloc[:,0:(nyearssub-statoffset)].median(axis=1) - filtereddf.iloc[:,0:(nyearssub-statoffset)].std(axis=1)
-    filtereddf.loc[(filtereddf['min'] < 0 ),'min'] = 0
-    #Need to set the min and max range values to zero where they drop to negative snow amounts
-    fig = go.Figure()
-    #These next four add_trace/go.Scatter calls/objects build the median and range lines/area plots. 
-    #Range for the full dataset.
-    #Only plot ranges if more than 5 years of record
-    if nyears >= 5:
-        fig.add_trace(go.Scatter(
-            x=pd.concat([subdf.index.to_series()[0:maxdayidx],subdf.index.to_series()[maxdayidx:0:-1]]),
-            y=pd.concat([subdf.loc[0:maxdayidx,'min'],(subdf.iloc[:,0:(nyears-statoffset)].median(axis=1) + subdf.iloc[:,0:(nyears-statoffset)].std(axis=1))[maxdayidx:0:-1]]),
-            fill='toself',
-            fillcolor='rgba(100,100,100,0.2)',
-            line_color='rgba(255,255,255,0)',
-            legendgroup='fullrecord',
-            showlegend=True,
-            name='Range'
-        ))
-    #Median for the full dataset
-    fig.add_trace(go.Scatter(
-        x=subdf.index[0:maxdayidx], 
-        y=subdf.iloc[:,0:(nyears-statoffset)].median(axis=1)[0:maxdayidx],
-        line_color='rgb(100,100,100)',
-        legendgroup='fullrecord',
-        name='Median'
-    ))
-    if nyearssub >= 5:
-        #Range for the ENSO subset of the data.
-        fig.add_trace(go.Scatter(
-            x=pd.concat([subdf.index.to_series()[0:maxdayidx],subdf.index.to_series()[maxdayidx:0:-1]]),
-            y=pd.concat([filtereddf.loc[0:maxdayidx,'min'],(filtereddf.iloc[:,0:(nyearssub-statoffset)].median(axis=1) + filtereddf.iloc[:,0:(nyearssub-statoffset)].std(axis=1))[maxdayidx:0:-1]]),
-            fill='toself',
-            fillcolor=fillarea,
-            line_color='rgba(255,255,255,0)',
-            legendgroup='onisub',
-            showlegend=True,
-            name='Selected Range'
-        ))
-    #Median for the ENSO subset of the data.
-    fig.add_trace(go.Scatter(
-        x=subdf.index[0:maxdayidx],
-        y=filtereddf.iloc[:,0:(nyearssub-statoffset)].median(axis=1)[0:maxdayidx],
-        line_color=fillline,
-        legendgroup='onisub',
-        name='Selected Median'
-    ))
-    #lets iterate through the years and plot the individual years with only the legend entry
-    #Strategy to get the plot to show only years of interest. 
-    # 1) by default only show a shaded range between max and min with a line for median snow
-    # 2) When the data are stratified by ENSO, add to the figure with attribute visible='legendonly'
-    #    Like this:
 
-    #Okay, need to always plot the current year and not plot the current year a second time if 
-    #The current year is included in the filtered data frame.
-    if any((currentyear.isin(yearsavail))):
-        #Deindex this by one so that the current year isn't plotted twice when the ENSO selection includes the
-        #ENSO value of the current year.
-        yearsavail = yearsavail[0:(len(yearsavail)-1)]
-
-    for ayear in yearsavail:
-        fig.add_trace(
-            go.Scatter(
-                x=filtereddf.index[0:maxdayidx],
-                y=filtereddf.loc[0:maxdayidx,ayear],
-                visible='legendonly',
-                name=ayear,
-                legend='legend2',
-            )
-        )
-    #Plot the current year on the chart if the station is active.
-    if station_is_active:
-        fig.add_trace(
-            go.Scatter(
-                x=subdf.index[0:maxdayidx],
-                y=subdf.loc[0:maxdayidx,currentyear[0]],
-                name='{}'.format(currentyear[0]),
-                line_color='rgb(0,0,0)',
-                legend='legend2',
-            )
-        )
-
-    fig.update_layout(
-        title = dict(text="Hydrologic Year SWE for \"{}\"<br>Oceanic Niño Index Range {} to {}".format(stnname,onirange[0],onirange[1]),
-                     font=dict(size=18)),
-        #xaxis_title = dict(text="Date", font=dict(size=18)),
-        xaxis = dict(
-            tickfont=dict(size=14),
-            tickmode = 'array',
-            tickvals = [1, 32, 62, 93, 124, 152, 183, 213, 244, 274, 305],
-            ticktext = ['1 Oct.', '1 Nov.', '1 Dec.', '1 Jan.', '1 Feb.', '1 Mar.', '1 Apr.', '1 May', '1 Jun.', '1 Jul.', '1 Aug.']
-        ),
-        yaxis_title=dict(text="Snow Water Equivalent (mm)", font=dict(size=18)),
-        yaxis = dict(
-            tickfont=dict(size=16)
-        ),
-        legend=dict(
-            orientation="h",
-            x=0.0,
-            y=1
-        ),
-        legend2=dict(
-            orientation="h",
-            yanchor="top",
-            y=-0.25,
-            xanchor="left",
-            x=0.0
-        )
+    plottitle="Hydrologic Year SWE for \"{}\"<br>Oceanic Niño Index Range {} to {}".format(stnname,onirange[0],onirange[1])
+    return snow_lineplot(
+        go,
+        pd,
+        subdf,
+        yearsuse,
+        currentyear,
+        maxdayidx,
+        fillarea,
+        fillline,
+        plottitle=plottitle
     )
-
-
-    return fig
 
 if __name__ == '__main__':
     snowapp.run(debug=False)
-
