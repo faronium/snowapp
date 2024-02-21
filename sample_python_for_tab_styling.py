@@ -1,0 +1,20 @@
+dcc.Tabs(
+
+        id="tabs_with_hlr",
+        value='ss7_routing',
+        parent_className='custom-tabs',
+        className='custom-tabs-container',
+        children=[
+            dcc.Tab(
+                label='Feed',
+                value='Feed',
+                className='custom-tab',
+                selected_className='custom-tab--selected'
+            ),
+            dcc.Tab(
+                label='Feed',
+                value='Feed',
+                className='custom-tab',
+                selected_className='custom-tab--selected'
+            ),
+        ]),
