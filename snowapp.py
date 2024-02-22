@@ -17,8 +17,9 @@ import numpy as np
 from dash import Dash, html, dcc, Input, Output, callback
 import plotly.graph_objects as go
 from datetime import datetime
+from snowdata import get_wyear_extrema_oni, get_oni_startrange
 from documentation import how_to_md, analysis_desc_md, header_text_md, footer_text_md
-from map import draw_station_map
+from snowmap import draw_station_map
 from snowplot import snow_lineplot
 
 '''
@@ -49,8 +50,8 @@ df = pd.read_csv('./snow/SW_DailyArchive.csv',index_col=[0],parse_dates=[0]) #He
 
 
 
-#dffresh = pd.read_csv('./snow/SWDaily.csv',index_col=[0],parse_dates=[0])
-dffresh = pd.read_csv('https://www.env.gov.bc.ca/wsd/data_searches/snow/asws/data/SWDaily.csv',index_col=[0],parse_dates=[0])
+dffresh = pd.read_csv('./snow/SWDaily.csv',index_col=[0],parse_dates=[0])
+#dffresh = pd.read_csv('https://www.env.gov.bc.ca/wsd/data_searches/snow/asws/data/SWDaily.csv',index_col=[0],parse_dates=[0])
 df = pd.concat([df,dffresh],axis=0)
 #Check current data for entries with all na/no data
 if (dffresh.isna().sum() == len(dffresh)).any():
@@ -61,23 +62,8 @@ else:
     stations_with_current_year = dffresh.columns[~(dffresh.isna().sum() == len(dffresh))]
 
 
-
-# In[3]:
-
-
-locdf = pd.read_csv('./snow/SNW_ASWS.csv')
-
-
 # ## Munging data to consistent timestamps and getting some useful indexes
-
-#
 # Looks like there are stations that have data at a non-standard time of 16:00. Six stations that have data on the even hour at some point in their record. These are '1A02P McBride Upper', '1B02P Tahtsa Lake', '1B08P Mt. Pondosy', '2F18P Brenda Mine', '3A25P Squamish River Upper', '3A28P Tetrahedron'. In all of these stations, the hourly data is in addition to the data reported at 16:00. So, can safely drop all of the excess data without worry.
-#
-#
-
-# In[4]:
-
-
 #Deal with the non-daily observations. Most are on the 16:00, some are on the 00:00 and others are on the even hour.
 #plt.close("all")
 #Set the rows with hours != 16:00 to NaN for stations '1A02P McBride Upper', '1B02P Tahtsa Lake', '1B08P Mt. Pondosy', '2F18P Brenda Mine',
@@ -87,33 +73,16 @@ df.loc[df.index.strftime('%H').isin(['00','01','02','03','04','05','06','07','08
         ['1A02P McBride Upper', '1B02P Tahtsa Lake', '1B08P Mt. Pondosy', '2F18P Brenda Mine',
          '3A25P Squamish River Upper', '3A28P Tetrahedron']] = np.nan
 
-
-#
 # Additionally, the stations '4D16P Forrest Kerr Mid Elevation Snow', '4D17P Forrest Kerr High Elevation Snow' have data on the 00:00. These also appear not to have data on the 16:00. So, perhaps we can simply move those timestamps by the 16 hours to make them
-
-# In[5]:
-
-
 dfsub = df[['4D16P Forrest Kerr Mid Elevation Snow','4D17P Forrest Kerr High Elevation Snow']]
 dfsub = dfsub.dropna(axis=0,how='all')
 dfsub.index += pd.Timedelta("16 hours")
 
-
-#
 # Now simply merge the two data frames into a master data frame that only has the data we want.
-#
-
-# In[6]:
-
-
 df.loc[df.index.strftime('%H') == '22',~df.columns.isin(['4D16P Forrest Kerr Mid Elevation Snow','4D17P Forrest Kerr High Elevation Snow'])] = np.nan
 df = df.loc[:,~df.columns.isin(['4D16P Forrest Kerr Mid Elevation Snow','4D17P Forrest Kerr High Elevation Snow'])].join(dfsub)
 df = df.dropna(axis=0,how='all')
 df = df.loc[:,df.columns.sort_values().unique()]
-
-
-# In[7]:
-
 
 #Filter the location file by what's in the data file and vice versa so that there is 1:1
 #correspondence between the meta data file and the data file. Let's do this on the location ID
@@ -121,33 +90,23 @@ df = df.loc[:,df.columns.sort_values().unique()]
 datastnids = pd.Series([i.split(' ',1)[0] for i in df.columns.to_list()])
 datastnnames = pd.Series([i.split(' ',1)[1] for i in df.columns.to_list()])
 
-
-# In[8]:
-
-
+#Bring in the station meta data
+locdf = pd.read_csv('./snow/SNW_ASWS.csv')
 metastnids = locdf['LCTN_ID']
 datastnnames = datastnnames[datastnids.isin(metastnids)]
 datastnids = datastnids[datastnids.isin(metastnids)]
 metastnids = metastnids[metastnids.isin(datastnids)]
 
-#re-subset the dataframes so that the
-df.loc[:,(datastnids+' '+datastnnames)]
+#re-subset the dataframes so that the stations match one for one
+df = df.loc[:,(datastnids+' '+datastnnames)]
 locdf = locdf.loc[locdf['LCTN_ID'].isin(metastnids),:]
+#if ~(stations_with_current_year.isin(datastnids+' '+datastnnames).all()):
+#    raise
 
-#Okay, so now we have parity in the location station ids. Have to rebuild the data column name
-#and then select only the data columns
-#locdf.head()
 locdf['text'] = locdf['LCTN_ID'] + ' ' + locdf['LCTN_NM'] + '<br>Elevation: ' + (locdf['ELEVATION']).astype(str)
 
-
-#
 # Make a column formatted that gives the hydrological year. Essentially the time index, forward by 3 months,
 # then reformatted to %Y using strftime.
-#
-
-# In[9]:
-
-
 def datetimepandas(timestamp,theformat):
     return datetime.strftime(timestamp,theformat)
 def hydrodoy_from_timestamp(timestamps):
@@ -181,31 +140,13 @@ def wateryear_from_timestamps(timestamps):
     wateryears = wateryears.astype(int)
     return wateryears
 
-
-
-
-
-#
-# Make a column formatted that gives the hydrological year. Essentially the time index, forward by 3 months,
-# then reformatted to %Y using strftime.
-#
-
 # ## Station Snow Statistics
 #
 # Interested in being able to correlate ENSO with timing of peak snow and amount of snow at the peak. Also interested in magnitude of peak melt rate and timing of the peak melt rate. These satistics will be part of a map-based view of the station data that will be colourized by the level of correlation or by the percent of peak snow associated with the
 df['hydrodoy'] = hydrodoy_from_timestamp(df.index.to_series())
 df['hydrological_year'] = wateryear_from_timestamps(df.index.to_series())
-#df.columns
-#index = pd.MultiIndex.from_arrays([df.index,hydrodoy_from_timestamp(df.index.to_series()),wateryear_from_timestamps(df.index.to_series())],names=('Date','hydrodoy','hydrological_year'))
-#df.index = index
-#index
 
 
-# In[43]:
-
-
-#Get the peak snow each year:
-df.groupby(by="hydrological_year").apply(max)
 #Now have to find when that peak occurred...!
 def count_coverage(series):
     return (~series.isna()).sum()
@@ -213,6 +154,7 @@ def count_coverage(series):
 #pd.set_option('display.max_rows', 150)
 #Find the number of years with more than 80% data coverage.
 nyears_complete = (df.groupby(by="hydrological_year").apply(count_coverage)*100/365 > 80).sum(axis='rows')
+#Get the peak snow each year:
 peak_annual_snow = df.groupby(by="hydrological_year").apply(max)
 
 #Now get stations with some chosen common period of record. Preferably this will be a subset of the stations with current
@@ -223,53 +165,10 @@ peak_annual_snow = df.groupby(by="hydrological_year").apply(max)
 # Need to bring in the monthly ENSO data. We'll probably use the Oceanic Nino Index for this.
 # May want to alternatively or additionally bring in the monthly PNA and use some form of season-averaged PNA as
 # a stratifire for snow. Should be more directly applicable to snow pack as it covaries with ENSO/is driven by it.
-
-# In[13]:
-
-
-#Import oceanic Nino index and massage into a form that allows selection by ENSO strength
-def get_wyear_extrema_oni():
-    onidata = pd.read_fwf('https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt')
-    #onidata = pd.read_fwf('./snow/oni.ascii.txt')
-    oniseaslist = list(['OND','NDJ','DJF','JFM','FMA','MAM'])
-    onidata = onidata[onidata['SEAS'].isin(oniseaslist)]
-    #Need to add a year to the OND and NDJ seasoned years to correspond to the hydrological year that ENSO cycle belongs to.
-    onidata['YR'] = onidata['YR'].mask(onidata['SEAS'].isin(['OND','NDJ']),onidata['YR']+1)
-
-
-    #Issue here is that the selector finds the years where the ONI range was met, but needs
-    #To identify the peak ONI values during the snow year.
-    mnxonidata = onidata.groupby(['YR']).min()
-    mnxonidata['MAX_ANOM'] = onidata.groupby(['YR']).max()['ANOM']
-    mnxonidata = mnxonidata.rename(columns={'ANOM':'MIN_ANOM'})
-    #Three cases:
-    #         1) where the min anom and the max anom are both negative, keep the min anom
-    #         2) where the max anom and the min anom are both positive, keep the max anom
-    #         3) where the min anom is negative and the max anom is positive, keep the largest
-    #                absolute value and it's sign.
-    minminmap = (mnxonidata['MIN_ANOM'] < 0) & (mnxonidata['MAX_ANOM'] <= 0)
-    maxmaxmap = (mnxonidata['MIN_ANOM'] >= 0) & (mnxonidata['MAX_ANOM'] > 0)
-    keepminmap = (mnxonidata['MIN_ANOM'] < 0) & (mnxonidata['MAX_ANOM'] > 0) & (np.abs(mnxonidata['MIN_ANOM']) >= np.abs(mnxonidata['MAX_ANOM']))
-    minmap = minminmap | keepminmap
-    keepmaxmap = (mnxonidata['MIN_ANOM'] < 0) & (mnxonidata['MAX_ANOM'] > 0) & (np.abs(mnxonidata['MAX_ANOM']) >= np.abs(mnxonidata['MIN_ANOM']))
-    maxmap = maxmaxmap | keepmaxmap
-    mnxonidata.loc[minmap,'ANOM'] = mnxonidata.loc[minmap,'MIN_ANOM']
-    mnxonidata.loc[maxmap,'ANOM'] = mnxonidata.loc[maxmap,'MAX_ANOM']
-    #Get most recent ONI and use this to set pick an ONI range to use in the slider initially.
-    return mnxonidata
-
-def get_oni_startrange(mnxonidata):
-    if mnxonidata.loc[mnxonidata.index[(len(mnxonidata)-1)],"ANOM"] > 0.5:
-        return [0.5,3]
-    elif mnxonidata.loc[mnxonidata.index[(len(mnxonidata)-1)],"ANOM"] < 0.5:
-        return [-3,-0.5]
-    else:
-        return [-0.5,0.5]
-
-# ## Build the app
-
-mnxonidata = get_wyear_extrema_oni()
+mnxonidata = get_wyear_extrema_oni(pd,np)
 startrange = get_oni_startrange(mnxonidata)
+
+
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 currentyear = df[['hydrological_year']].max()
 fillninoarea = 'rgba(255,110,95,0.3)'
