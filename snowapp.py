@@ -1,15 +1,11 @@
 #!/usr/bin/env python
 # coding: utf-8
-
 # # Snow Data
 #
 # Tool to import archived snow data and manipulate it using python pandas. Eventually
 # to plot with plotlinkedinly/dash app of some kind.
 #
 
-# ## Importing the data
-
-# In[2]:
 
 
 import pandas as pd
@@ -17,7 +13,7 @@ import numpy as np
 from dash import Dash, html, dcc, Input, Output, callback
 import plotly.graph_objects as go
 from datetime import datetime
-from snowdata import get_wyear_extrema_oni, get_oni_startrange
+from snowdata import get_wyear_extrema_oni, get_oni_startrange, load_munge_snow_data, count_coverage
 from documentation import how_to_md, analysis_desc_md, header_text_md, footer_text_md
 from snowmap import draw_station_map
 from snowplot import snow_lineplot
@@ -43,46 +39,16 @@ PNA data URL: https://www.cpc.ncep.noaa.gov/products/precip/CWlink/pna/norm.pna.
 NAO data URL: https://www.cpc.ncep.noaa.gov/products/precip/CWlink/pna/norm.nao.monthly.b5001.current.ascii
 All teleconnections in one! ftp://ftp.cpc.ncep.noaa.gov/wd52dg/data/indices/tele_index.nh
 '''
-#df = pd.read_csv('./snow/SW_DailyArchive.csv',index_col=[0],parse_dates=[0]) #Here the [0] tells fxn to parse first column
-df = pd.read_csv('https://www.env.gov.bc.ca/wsd/data_searches/snow/asws/data/SW_DailyArchive.csv',index_col=[0],parse_dates=[0]) #Here the [0] tells fxn to parse first column
 
-# In[43]:
+df, stations_with_current_year = load_munge_snow_data()
 
+#lets figure out how to make quantiles for each station/day and 
+#compute the percentile amount relative to median for all stations.
+#The quantiles will need to be passed into the plotting function
+#To be shown.
 
-
-#dffresh = pd.read_csv('./snow/SWDaily.csv',index_col=[0],parse_dates=[0])
-dffresh = pd.read_csv('https://www.env.gov.bc.ca/wsd/data_searches/snow/asws/data/SWDaily.csv',index_col=[0],parse_dates=[0])
-df = pd.concat([df,dffresh],axis=0)
-#Check current data for entries with all na/no data
-if (dffresh.isna().sum() == len(dffresh)).any():
-    #Have stations with all rows of na, must subset dffresh to remove those stations.
-    print('hi')
-    stations_with_current_year = dffresh.columns[~(dffresh.isna().sum() == len(dffresh))]
-else:
-    stations_with_current_year = dffresh.columns[~(dffresh.isna().sum() == len(dffresh))]
-
-
-# ## Munging data to consistent timestamps and getting some useful indexes
-# Looks like there are stations that have data at a non-standard time of 16:00. Six stations that have data on the even hour at some point in their record. These are '1A02P McBride Upper', '1B02P Tahtsa Lake', '1B08P Mt. Pondosy', '2F18P Brenda Mine', '3A25P Squamish River Upper', '3A28P Tetrahedron'. In all of these stations, the hourly data is in addition to the data reported at 16:00. So, can safely drop all of the excess data without worry.
-#Deal with the non-daily observations. Most are on the 16:00, some are on the 00:00 and others are on the even hour.
-#plt.close("all")
-#Set the rows with hours != 16:00 to NaN for stations '1A02P McBride Upper', '1B02P Tahtsa Lake', '1B08P Mt. Pondosy', '2F18P Brenda Mine',
-#         '3A25P Squamish River Upper', '3A28P Tetrahedron']
-df.loc[df.index.strftime('%H').isin(['00','01','02','03','04','05','06','07','08','09','10','11',
-        '12','13','14','15','17','18','19','20','21','22','23']),
-        ['1A02P McBride Upper', '1B02P Tahtsa Lake', '1B08P Mt. Pondosy', '2F18P Brenda Mine',
-         '3A25P Squamish River Upper', '3A28P Tetrahedron']] = np.nan
-
-# Additionally, the stations '4D16P Forrest Kerr Mid Elevation Snow', '4D17P Forrest Kerr High Elevation Snow' have data on the 00:00. These also appear not to have data on the 16:00. So, perhaps we can simply move those timestamps by the 16 hours to make them
-dfsub = df[['4D16P Forrest Kerr Mid Elevation Snow','4D17P Forrest Kerr High Elevation Snow']]
-dfsub = dfsub.dropna(axis=0,how='all')
-dfsub.index += pd.Timedelta("16 hours")
-
-# Now simply merge the two data frames into a master data frame that only has the data we want.
-df.loc[df.index.strftime('%H') == '22',~df.columns.isin(['4D16P Forrest Kerr Mid Elevation Snow','4D17P Forrest Kerr High Elevation Snow'])] = np.nan
-df = df.loc[:,~df.columns.isin(['4D16P Forrest Kerr Mid Elevation Snow','4D17P Forrest Kerr High Elevation Snow'])].join(dfsub)
-df = df.dropna(axis=0,how='all')
-df = df.loc[:,df.columns.sort_values().unique()]
+#We only need the median outside of the line plotting function, 
+#so we can save the full quantile calculation for there. 
 
 #Filter the location file by what's in the data file and vice versa so that there is 1:1
 #correspondence between the meta data file and the data file. Let's do this on the location ID
@@ -104,6 +70,7 @@ locdf = locdf.loc[locdf['LCTN_ID'].isin(metastnids),:]
 #    raise
 
 locdf['text'] = locdf['LCTN_ID'] + ' ' + locdf['LCTN_NM'] + '<br>Elevation: ' + (locdf['ELEVATION']).astype(str)
+locdf.head()
 
 # Make a column formatted that gives the hydrological year. Essentially the time index, forward by 3 months,
 # then reformatted to %Y using strftime.
@@ -146,26 +113,19 @@ def wateryear_from_timestamps(timestamps):
 df['hydrodoy'] = hydrodoy_from_timestamp(df.index.to_series())
 df['hydrological_year'] = wateryear_from_timestamps(df.index.to_series())
 
+#Add on the month-day column for better plotting
+df['month-day'] = df.index.strftime('%m-%d')
+#Drop all leap years
+df = df.loc[(~(df['month-day']=='02-29')),:]
 
-#Now have to find when that peak occurred...!
-def count_coverage(series):
-    return (~series.isna()).sum()
 
-#pd.set_option('display.max_rows', 150)
 #Find the number of years with more than 80% data coverage.
 nyears_complete = (df.groupby(by="hydrological_year").apply(count_coverage)*100/365 > 80).sum(axis='rows')
 #Get the peak snow each year:
 peak_annual_snow = df.groupby(by="hydrological_year").apply(max)
+#nyears_complete
 
-#Now get stations with some chosen common period of record. Preferably this will be a subset of the stations with current
-#and stations with more than x number of years.
-
-
-#
-# Need to bring in the monthly ENSO data. We'll probably use the Oceanic Nino Index for this.
-# May want to alternatively or additionally bring in the monthly PNA and use some form of season-averaged PNA as
-# a stratifire for snow. Should be more directly applicable to snow pack as it covaries with ENSO/is driven by it.
-mnxonidata = get_wyear_extrema_oni(pd,np)
+mnxonidata = get_wyear_extrema_oni()
 startrange = get_oni_startrange(mnxonidata)
 
 
@@ -175,6 +135,7 @@ fillninoarea = 'rgba(255,110,95,0.3)'
 fillninoline = 'rgb(255,110,95)'
 fillninaarea = 'rgba(0,175,245,0.3)'
 fillninaline = 'rgb(0,175,245)'
+
 snowapp = Dash(__name__,
                   external_stylesheets = external_stylesheets,
                   title = 'ENSO Snow BC: exploring snow accumulation and El Nino/La Nina in British Columbia'
@@ -305,7 +266,6 @@ def update_line_chart(onirange,clickData):
     and filter the master dataframe and the years according to the ONI magnitude
     Then calls a subfunction to create the actual map.
     '''
-    maxdayidx = 321
     #Here's what the clickData look like:
     #{'points': [{
     #   'curveNumber': 0,
@@ -326,11 +286,14 @@ def update_line_chart(onirange,clickData):
     #
     stnname = clickData['points'][0]['text'].split('<br>')[0]
     subdf = pd.pivot_table(
-                df[[stnname,'hydrological_year','hydrodoy']],
-                index=["hydrodoy"],
+                df[[stnname,'hydrological_year','month-day']],
+                index=['month-day'],
                 columns="hydrological_year",
                 values=stnname
             )
+    #The pivot re-orders the intex. 
+    #need to stack the bottom onto the top to make a hydrological year
+    subdf = pd.concat([subdf.iloc[-92:,:],subdf.iloc[0:(366-92):,]],axis=0)
     yearsuse = mnxonidata.index[(mnxonidata["ANOM"] > onirange[0]) &
         (mnxonidata["ANOM"] < onirange[1])].unique()
     if ((onirange[0] + onirange[1])/2 > 0):
@@ -347,7 +310,6 @@ def update_line_chart(onirange,clickData):
         subdf,
         yearsuse,
         currentyear,
-        maxdayidx,
         fillarea,
         fillline,
         plottitle=plottitle
