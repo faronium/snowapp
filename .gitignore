@@ -6,3 +6,5 @@ pyvenv.cfg
 share/
 __pycache__/
 .ipynb_checkpoints/
+requirements.txt.backup
+requirements_080425.txt

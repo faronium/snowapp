@@ -114,7 +114,9 @@ def get_oni_startrange(mnxonidata):
 #Now have to find when that peak occurred...!
 def count_coverage(series):
     return (~series.isna()).sum()
-    
+
+def get_median(series):
+    return(series.median())
 #Define a series of functions to be used to calculate the desired statistics on all stations
 #and all years of data. I'll probably write these individually outside of the functions first
 #and then when I am satisfied that they work okay, will place them inside the functions. Still

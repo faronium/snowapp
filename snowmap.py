@@ -5,19 +5,28 @@ def draw_station_map(go,locdfuse):
     to lighten it up. May opt to pass in some styling at a later date, but for now
     this serves the purpose.
     '''
-    token = open(".mapbox_token").read()
     fig = go.Figure()
     fig.add_trace(
-        go.Scattermapbox(
+        go.Scattermap(
             lon = locdfuse['LONGITUDE'],
             lat = locdfuse['LATITUDE'],
             text = locdfuse['text'],
             mode = 'markers',
-            marker=go.scattermapbox.Marker(
+            customdata=locdfuse[['LCTN_NM','LCTN_ID','ELEVATION','pct_snow']],
+            hovertemplate="<b>%{customdata[0]}</b><br><br>"+
+            "Station ID: %{customdata[1]}<br>"+
+            "Elevation: %{customdata[2]}<br>"+
+            "Current Anomaly: %{customdata[3]:.2f}"+
+            "<extra></extra>",
+            marker=go.scattermap.Marker(
                 size = 16,
-                color = 'rgba(0,175,245,0.7)',     #locdf['ELEVATION'],
+                colorscale='RdBu',
+                color = locdfuse['pct_snow'],  #'rgba(0,175,245,0.7)'
+                cmin = 25.,
+                cmax = 175.,
+                cmid = 100.,
             ),
-            selected = go.scattermapbox.Selected(
+            selected = dict(
                 marker = {
                     'size': 26,
                     'color': 'rgba(255,110,95,0.99)',
@@ -26,23 +35,22 @@ def draw_station_map(go,locdfuse):
         )
     )
     fig.update_layout(
-        #title_text = 'test snow sites',
         clickmode = 'event+select',
-        mapbox = {
-            'accesstoken': token,
-            'style': 'outdoors',
+        map = {
             'zoom': 3,
-            'center': go.layout.mapbox.Center(
-                         lat=54.5,
+            'center': dict(
+                         lat=52.5,
                          lon=-126
                       ),
+            'style': 'open-street-map',
+            
         },
-     )
-    fig.update_layout(
         margin = dict(l=0, r=0, b=0, t=0),
-        mapbox_bounds = {"west": -142, "east": -110, "south": 45, "north": 63},
-        #width=600, 
-        #height=600
-    )
-    #fig.update_traces(cluster=dict(enabled=True))
+        map_bounds = {"west": -142, "east": -110, "south": 45, "north": 61},
+        hoverlabel=dict(
+            bgcolor="white",
+            font_size=14,
+        )
+     )
+
     return fig

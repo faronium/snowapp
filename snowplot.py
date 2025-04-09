@@ -164,8 +164,8 @@ def snow_lineplot(go,pd,subdf,yearsuse,currentyear,fillarea,fillline,plottitle):
         fig.add_trace(
             go.Scatter(
                 x=subdf.index.to_series()[0:maxdayidx],
-                y=subdf[currentyear[0]].iloc[0:maxdayidx],
-                name='{}'.format(currentyear[0]),
+                y=subdf[currentyear.iloc[0]].iloc[0:maxdayidx],
+                name='{}'.format(currentyear.iloc[0]),
                 line_color='rgb(0,0,0)',
                 legend='legend2',
             )
