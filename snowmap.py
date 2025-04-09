@@ -19,9 +19,10 @@ def draw_station_map(go,locdfuse):
             "Current Anomaly: %{customdata[3]:.2f}"+
             "<extra></extra>",
             marker=go.scattermap.Marker(
-                size = 16,
+                size = 18,
                 colorscale='RdBu',
                 color = locdfuse['pct_snow'],  #'rgba(0,175,245,0.7)'
+                opacity = 1.,
                 cmin = 25.,
                 cmax = 175.,
                 cmid = 100.,
