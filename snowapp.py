@@ -1,5 +1,12 @@
 #!/usr/bin/env python
 # coding: utf-8
+
+# In[1]:
+
+
+#!/usr/bin/env python
+# coding: utf-8
+
 # # Snow Data
 #
 # Tool to import archived snow data and manipulate it using python pandas. Eventually
@@ -12,11 +19,17 @@ import pandas as pd
 import numpy as np
 from dash import Dash, html, dcc, Input, Output, callback
 import plotly.graph_objects as go
+import dash_bootstrap_components as dbc
 from datetime import datetime
-from snowdata import get_wyear_extrema_oni, get_oni_startrange, load_munge_snow_data, count_coverage
+import time
+from snowdata import get_wyear_extrema_oni, get_oni_startrange, load_munge_snow_data, count_coverage, get_median
 from documentation import how_to_md, analysis_desc_md, header_text_md, footer_text_md
 from snowmap import draw_station_map
 from snowplot import snow_lineplot
+
+
+# In[2]:
+
 
 '''
 Author: Faron Anslow
@@ -40,7 +53,22 @@ NAO data URL: https://www.cpc.ncep.noaa.gov/products/precip/CWlink/pna/norm.nao.
 All teleconnections in one! ftp://ftp.cpc.ncep.noaa.gov/wd52dg/data/indices/tele_index.nh
 '''
 
+
+# In[3]:
+
+
+pd.set_option('display.max_rows', 30)
+#df
+
+
+# In[4]:
+
+
 df, stations_with_current_year = load_munge_snow_data()
+
+
+# In[5]:
+
 
 #lets figure out how to make quantiles for each station/day and 
 #compute the percentile amount relative to median for all stations.
@@ -49,6 +77,10 @@ df, stations_with_current_year = load_munge_snow_data()
 
 #We only need the median outside of the line plotting function, 
 #so we can save the full quantile calculation for there. 
+
+
+# In[6]:
+
 
 #Filter the location file by what's in the data file and vice versa so that there is 1:1
 #correspondence between the meta data file and the data file. Let's do this on the location ID
@@ -70,7 +102,10 @@ locdf = locdf.loc[locdf['LCTN_ID'].isin(metastnids),:]
 #    raise
 
 locdf['text'] = locdf['LCTN_ID'] + ' ' + locdf['LCTN_NM'] + '<br>Elevation: ' + (locdf['ELEVATION']).astype(str)
-locdf.head()
+
+
+# In[7]:
+
 
 # Make a column formatted that gives the hydrological year. Essentially the time index, forward by 3 months,
 # then reformatted to %Y using strftime.
@@ -119,11 +154,54 @@ df['month-day'] = df.index.strftime('%m-%d')
 df = df.loc[(~(df['month-day']=='02-29')),:]
 
 
+# In[8]:
+
+
+#pd.set_option('display.max_rows', 150)
 #Find the number of years with more than 80% data coverage.
-nyears_complete = (df.groupby(by="hydrological_year").apply(count_coverage)*100/365 > 80).sum(axis='rows')
+nyears_complete = (df.groupby(by="hydrological_year").apply(count_coverage,include_groups=False)*100/365 > 80).sum(axis='rows')
+nyears_complete = nyears_complete[:-2]
 #Get the peak snow each year:
-peak_annual_snow = df.groupby(by="hydrological_year").apply(max)
-#nyears_complete
+peak_annual_snow = df.iloc[:,:-1].groupby(by="hydrological_year").max()
+peak_annual_snow = peak_annual_snow.iloc[:,:-1]
+historical_median_snow = df.iloc[:,:-2].groupby(by="hydrodoy").mean()
+
+
+# In[9]:
+
+
+#peak_annual_snow
+dftest = df.copy()
+#keep the index
+dates = df.index
+dftest = dftest.set_index(['hydrodoy'],append=True).iloc[:,:-2]
+historical_median_snow = dftest.rolling(window=5,center=True).mean().groupby(level=1).mean()
+
+
+# In[10]:
+
+
+#dftest = dftest.iloc[:,:-3]
+dftest.sort_index(level=['hydrodoy'])
+#pd.set_option('display.max_rows', None)
+#dftest.loc[(slice(None),1),:]
+pd.set_option('display.max_rows', 30)
+snow_pct_median = 100*(dftest/historical_median_snow)
+snow_pct_median.replace([np.inf], 399, inplace=True)
+snow_pct_median[snow_pct_median > 399] = 400
+snow_pct_now = snow_pct_median.iloc[-1:,].reset_index(drop=True).T #=range(126) #= snow_pct_median.iloc[-1:,].T
+
+
+#check to see if we have a 1:1 match of the current snow percentage with the locations dataframe
+if (snow_pct_now.index == locdf['LCTN_ID'] + ' ' + locdf['LCTN_NM']).all():
+    locdf['pct_snow'] = snow_pct_now.iloc[:,0].values
+else:
+    None
+
+
+
+# In[11]:
+
 
 mnxonidata = get_wyear_extrema_oni()
 startrange = get_oni_startrange(mnxonidata)
@@ -136,8 +214,12 @@ fillninoline = 'rgb(255,110,95)'
 fillninaarea = 'rgba(0,175,245,0.3)'
 fillninaline = 'rgb(0,175,245)'
 
+
+# In[12]:
+
+
 snowapp = Dash(__name__,
-                  external_stylesheets = external_stylesheets,
+                  external_stylesheets = [dbc.themes.SANDSTONE],
                   title = 'ENSO Snow BC: exploring snow accumulation and El Nino/La Nina in British Columbia'
               )
 server = snowapp.server
@@ -317,3 +399,10 @@ def update_line_chart(onirange,clickData):
 
 if __name__ == '__main__':
     snowapp.run(debug=False)
+
+
+# In[ ]:
+
+
+
+
