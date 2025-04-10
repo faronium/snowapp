@@ -177,45 +177,60 @@ snowapp.layout = html.Div([
                 label='ENSO Snow BC',
                 children=[
                     html.Div(className='row', children=[
-                        html.Div([
-                        #Want to implement a checklist here that allows for the selection of one or more of three
-                        #things
-                        #
-                        #1) Want to allow restriction to long records only
-                        #2) Want to allow restriction to records with current year only
-                        #3) Want an option to show only locations with data in an overlapping 30 years
-                        #   normal period or restricted normal period. 1991 -- 2020 or 2000
-                        #   to 2020 ideally and restrict the stats to those.
-                        dcc.Checklist(
-                            options=[
-                                {'label': 'Require current year?', 'value': 'rcy'},
-                                {'label': 'Require 20 or more years?', 'value': 'rtmy'},
-                            #    {'label': 'Require current normal preiod', 'value': 'rcnp'},
-                            ],
-                            value=['rcy'],
-                            #inline=True,
-                            id='record-length-current-check',
-                        )
-                    ], className='four columns',),
-                    html.Div([
-                    html.P("Filter by La Niña/El Niño Strength:"),
-                    dcc.RangeSlider(
-                        min=-3,
-                        max=3,
-                        step=0.1,
-                        #Range slider with custom marks.
-                        marks={
-                            -2.7: {'label': 'Extreme La Niña', 'style': {'color': fillninaline}},
-                            -1.3: {'label': 'Mod. La Niña', 'style': {'color': fillninaline}},
-                            -0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
-                            0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
-                            1.3: {'label': 'Mod. El Niño', 'style': {'color': fillninoline}},
-                            2.7: {'label': 'Extreme El Niño', 'style': {'color': fillninoline}}
-                        },
-                        value=[startrange[0], startrange[1]],
-                        updatemode='drag',
-                        id='oni-range-slider'),
-                    ], className='eight columns',),
+                        html.Div(
+                            [
+                                #Want to implement a checklist here that allows for the selection of one or more of three
+                                #things
+                                #
+                                #1) Want to allow restriction to long records only
+                                #2) Want to allow restriction to records with current year only
+                                dcc.Checklist(
+                                    options=[
+                                        {'label': 'Active stations?', 'value': 'rcy'},
+                                        {'label': '20+ years of record?', 'value': 'rtmy'},
+                                    ],
+                                    value=['rcy'],
+                                    id='record-length-current-check',
+                                )
+                            ], 
+                            className='two columns',
+                        ),
+                        html.Div(
+                            [
+                                #Want to implement a check whether to show the maps with anomalies or not.
+                                dcc.Checklist(
+                                    options=[
+                                        {'label': 'Plot station anomalies?', 'value': 'anomstat'},
+                                    ],
+                                    value=[],
+                                    id='show-anoms-stat',
+                                ),
+                            ], 
+                            className='two columns',
+                        ),
+                        html.Div(
+                            [
+                                html.P("Filter by La Niña/El Niño Strength:"),
+                                dcc.RangeSlider(
+                                    min=-3,
+                                    max=3,
+                                    step=0.1,
+                                    #Range slider with custom marks.
+                                    marks={
+                                        -2.7: {'label': 'Extreme La Niña', 'style': {'color': fillninaline}},
+                                        -1.3: {'label': 'Mod. La Niña', 'style': {'color': fillninaline}},
+                                        -0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
+                                        0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
+                                        1.3: {'label': 'Mod. El Niño', 'style': {'color': fillninoline}},
+                                        2.7: {'label': 'Extreme El Niño', 'style': {'color': fillninoline}}
+                                    },
+                                    value=[startrange[0], startrange[1]],
+                                    updatemode='drag',
+                                    id='oni-range-slider'
+                                ),
+                            ], 
+                            className='eight columns',
+                        ),
                 ]),
                 html.Div(className='row', children=[
                     html.Div([
@@ -261,14 +276,21 @@ snowapp.layout = html.Div([
 @snowapp.callback(
     Output('snow-station-map', 'figure'),
     Input('record-length-current-check','value'),
+    Input('show-anoms-stat','value'),
 )
-def make_station_map(reccheck):
+def make_station_map(reccheck,anomstat):
     '''
     Work with the record length checklist to filter the location data according to
     what is available in the master dataframe. The argument reccheck is the list
     of strings created as output by the checklist that indicates the logical
     filters. If present, then true, if absent, no filter.
     '''
+    if len(anomstat) == 0:
+        #Plot single color symbols on the station map
+        anomstat=False
+    else:
+        #Plot colors according to the current daily station anomaly
+        anomstat=True
     locdfuse = locdf
     if ('rcy' in reccheck):
         #Only keep stations with current year's data
@@ -277,7 +299,7 @@ def make_station_map(reccheck):
         #Only keep stations that have 30 or more years of complete records.
         locdfuse = locdfuse.loc[(locdfuse['LCTN_ID'] + ' ' + locdfuse['LCTN_NM']).isin(pd.Series(nyears_complete.index[nyears_complete >= 20])),:]
 
-    return draw_station_map(go,locdfuse)
+    return draw_station_map(go,locdfuse,anomstat)
 
 #Now make a callback that uses the values from the drop down and the slider selection to stratify the
 #data and make the plot
@@ -330,7 +352,7 @@ def update_line_chart(onirange,clickData):
         fillarea = fillninaarea
         fillline = fillninaline
 
-    plottitle="Hydrologic Year SWE for \"{}\"<br>Oceanic Niño Index Range {} to {}".format(stnname,onirange[0],onirange[1])
+    plottitle="Hydrologic Year SWE for \"{}\" Oceanic Niño Index Range {} to {}".format(stnname,onirange[0],onirange[1])
     return snow_lineplot(
         go,
         pd,
@@ -343,7 +365,7 @@ def update_line_chart(onirange,clickData):
     )
 
 if __name__ == '__main__':
-    snowapp.run(debug=False)
+    snowapp.run(debug=True,port=8059)
 
 
 

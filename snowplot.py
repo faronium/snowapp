@@ -173,18 +173,18 @@ def snow_lineplot(go,pd,subdf,yearsuse,currentyear,fillarea,fillline,plottitle):
 
     fig.update_layout(
         title = dict(text = plottitle,
-                     font = dict(size=18)),
+                     font = dict(size=16)),
         #xaxis_title = dict(text="Date", font=dict(size=18)),
         xaxis = dict(
             type='category',
-            tickfont=dict(size=14),
+            tickfont=dict(size=13),
             tickmode = 'array',
             tickvals = ['10-01', '11-01', '12-01', '01-01', '02-01', '03-01', '04-01', '05-01', '06-01', '07-01', '08-01'],
             ticktext = ['1 Oct', '1 Nov', '1 Dec', '1 Jan', '1 Feb', '1 Mar', '1 Apr', '1 May', '1 Jun', '1 Jul', '1 Aug']
         ),
-        yaxis_title=dict(text="Snow Water Equivalent (mm)", font=dict(size=18)),
+        yaxis_title=dict(text="Snow Water Equivalent (mm)", font=dict(size=15)),
         yaxis = dict(
-            tickfont=dict(size=16)
+            tickfont=dict(size=13)
         ),
         legend=dict(
             orientation="h",

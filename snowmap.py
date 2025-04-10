@@ -1,4 +1,4 @@
-def draw_station_map(go,locdfuse):
+def draw_station_map(go,locdfuse,anomstat):
     '''
     Function to draw a map of data from the location dataframe locdfuse using mapbox
     map tiles. This function was offloaded from the main snowapp code
@@ -6,6 +6,26 @@ def draw_station_map(go,locdfuse):
     this serves the purpose.
     '''
     fig = go.Figure()
+    if anomstat:
+        markeruse = go.scattermap.Marker(
+                size = 18,
+                colorscale='RdBu',
+                color = locdfuse['pct_snow'],  #'rgba(0,175,245,0.7)'
+                opacity = 1.,
+                cmin = 25.,
+                cmax = 175.,
+                cmid = 100.,
+            )
+    else:
+        markeruse = go.scattermap.Marker(
+                size = 18,
+                colorscale='RdBu',
+                color = 'rgba(0,175,245,0.7)',
+                opacity = 1.,
+                cmin = 25.,
+                cmax = 175.,
+                cmid = 100.,
+            )
     fig.add_trace(
         go.Scattermap(
             lon = locdfuse['LONGITUDE'],
@@ -18,19 +38,11 @@ def draw_station_map(go,locdfuse):
             "Elevation: %{customdata[2]}<br>"+
             "Current Anomaly: %{customdata[3]:.2f}"+
             "<extra></extra>",
-            marker=go.scattermap.Marker(
-                size = 18,
-                colorscale='RdBu',
-                color = locdfuse['pct_snow'],  #'rgba(0,175,245,0.7)'
-                opacity = 1.,
-                cmin = 25.,
-                cmax = 175.,
-                cmid = 100.,
-            ),
+            marker=markeruse,
             selected = dict(
                 marker = {
                     'size': 26,
-                    'color': 'rgba(255,110,95,0.99)',
+                    'color': 'rgba(0,250,131,0.75)',
                 }
             ),
         )
