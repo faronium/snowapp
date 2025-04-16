@@ -1,6 +1,12 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+# In[1]:
+
+
+#!/usr/bin/env python
+# coding: utf-8
+
 # # Snow Data
 #
 # Tool to import archived snow data and manipulate it using python pandas. Eventually
@@ -20,6 +26,9 @@ from snowdata import get_wyear_extrema_oni, get_oni_startrange, load_munge_snow_
 from documentation import how_to_md, analysis_desc_md, header_text_md, footer_text_md
 from snowmap import draw_station_map
 from snowplot import snow_lineplot
+
+
+# In[2]:
 
 
 '''
@@ -44,15 +53,34 @@ NAO data URL: https://www.cpc.ncep.noaa.gov/products/precip/CWlink/pna/norm.nao.
 All teleconnections in one! ftp://ftp.cpc.ncep.noaa.gov/wd52dg/data/indices/tele_index.nh
 '''
 
+
+# In[3]:
+
+
+pd.set_option('display.max_rows', 30)
+#df
+
+
+# In[4]:
+
+
 df, stations_with_current_year = load_munge_snow_data()
 
 
+# In[5]:
+
+
+#lets figure out how to make quantiles for each station/day and 
 #compute the percentile amount relative to median for all stations.
 #The quantiles will need to be passed into the plotting function
 #To be shown.
 
 #We only need the median outside of the line plotting function, 
 #so we can save the full quantile calculation for there. 
+
+
+# In[6]:
+
 
 #Filter the location file by what's in the data file and vice versa so that there is 1:1
 #correspondence between the meta data file and the data file. Let's do this on the location ID
@@ -74,6 +102,10 @@ locdf = locdf.loc[locdf['LCTN_ID'].isin(metastnids),:]
 #    raise
 
 locdf['text'] = locdf['LCTN_ID'] + ' ' + locdf['LCTN_NM'] + '<br>Elevation: ' + (locdf['ELEVATION']).astype(str)
+
+
+# In[7]:
+
 
 # Make a column formatted that gives the hydrological year. Essentially the time index, forward by 3 months,
 # then reformatted to %Y using strftime.
@@ -121,12 +153,22 @@ df['month-day'] = df.index.strftime('%m-%d')
 #Drop all leap years
 df = df.loc[(~(df['month-day']=='02-29')),:]
 
+
+# In[8]:
+
+
+#pd.set_option('display.max_rows', 150)
 #Find the number of years with more than 80% data coverage.
 nyears_complete = (df.groupby(by="hydrological_year").apply(count_coverage,include_groups=False)*100/365 > 80).sum(axis='rows')
 nyears_complete = nyears_complete[:-2]
 #Get the peak snow each year:
 peak_annual_snow = df.iloc[:,:-1].groupby(by="hydrological_year").max()
 peak_annual_snow = peak_annual_snow.iloc[:,:-1]
+historical_median_snow = df.iloc[:,:-2].groupby(by="hydrodoy").mean()
+
+
+# In[9]:
+
 
 #peak_annual_snow
 dftest = df.copy()
@@ -134,6 +176,10 @@ dftest = df.copy()
 dates = df.index
 dftest = dftest.set_index(['hydrodoy'],append=True).iloc[:,:-2]
 historical_median_snow = dftest.rolling(window=5,center=True).mean().groupby(level=1).mean()
+
+
+# In[10]:
+
 
 #dftest = dftest.iloc[:,:-3]
 dftest.sort_index(level=['hydrodoy'])
@@ -152,6 +198,11 @@ if (snow_pct_now.index == locdf['LCTN_ID'] + ' ' + locdf['LCTN_NM']).all():
 else:
     None
 
+
+
+# In[11]:
+
+
 mnxonidata = get_wyear_extrema_oni()
 startrange = get_oni_startrange(mnxonidata)
 
@@ -163,113 +214,145 @@ fillninoline = 'rgb(255,110,95)'
 fillninaarea = 'rgba(0,175,245,0.3)'
 fillninaline = 'rgb(0,175,245)'
 
+
+# In[35]:
+
+
 snowapp = Dash(__name__,
                   external_stylesheets = [dbc.themes.SANDSTONE],
                   title = 'ENSO Snow BC: exploring snow accumulation and El Nino/La Nina in British Columbia'
               )
 server = snowapp.server
+
+reclengthselect = html.Div(
+    [
+        #Want to implement a checklist here that allows for the selection of one or more of three
+        #things
+        #
+        #1) Want to allow restriction to long records only
+        #2) Want to allow restriction to records with current year only
+        dcc.Checklist(
+            options=[
+                {'label': 'Active stations?', 'value': 'rcy'},
+                {'label': '20+ years of record?', 'value': 'rtmy'},
+            ],
+            value=['rcy'],
+            id='record-length-current-check',
+        )
+    ],
+)
+
+
+anomselect = html.Div(
+    [
+        #Want to implement a check whether to show the maps with anomalies or not.
+        dcc.Checklist(
+            options=[
+                {'label': 'Plot station anomalies?', 'value': 'anomstat'},
+            ],
+            value=[],
+            id='show-anoms-stat',
+        ),
+    ],
+)
+
+slider = html.Div(
+    [
+        html.P("Filter by La Niña/El Niño Strength:"),
+        dcc.RangeSlider(
+            min=-3,
+            max=3,
+            step=0.1,
+            #Range slider with custom marks.
+            marks={
+                -2.7: {'label': 'Extreme La Niña', 'style': {'color': fillninaline}},
+                -1.3: {'label': 'Mod. La Niña', 'style': {'color': fillninaline}},
+                -0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
+                0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
+                1.3: {'label': 'Mod. El Niño', 'style': {'color': fillninoline}},
+                2.7: {'label': 'Extreme El Niño', 'style': {'color': fillninoline}}
+            },
+            value=[startrange[0], startrange[1]],
+            updatemode='drag',
+            id='oni-range-slider'),
+    ],
+)
+
+snowmap = html.Div(
+    [
+        dcc.Graph(
+            id="snow-station-map",
+            #This is the initil point to draw data for. Clunky way of assigning it...
+            clickData={'points': [{'text': '3A25P Squamish River Upper<br>Elevation: 1360.0'}]},
+            #Get rid of the selection buttons in the map because they will confuse with
+            #The select on click action that's desired.
+            config={
+                'modeBarButtonsToRemove': ['pan2d', 'lasso2d', 'select2d']
+            }
+        ),
+    ],
+)
+
+snowgraph = html.Div(
+    [
+        dcc.Graph(id="snow-station-graph",
+            config={
+                'modeBarButtonsToRemove': ['zoom2d', 'pan2d', 'autoScale2d'],
+                'modeBarButtonsToAdd': ['v1hovermode'],
+            }
+        ),
+    ],
+)
+
 snowapp.layout = html.Div([
     #Call the function to produce the documentation using dcc.markdown
     header_text_md(dcc),
-    dcc.Tabs(
+    dbc.Card([dbc.Tabs(
         children=[
-            dcc.Tab(
-                label='ENSO Snow BC',
-                children=[
-                    html.Div(className='row', children=[
-                        html.Div(
-                            [
-                                #Want to implement a checklist here that allows for the selection of one or more of three
-                                #things
-                                #
-                                #1) Want to allow restriction to long records only
-                                #2) Want to allow restriction to records with current year only
-                                dcc.Checklist(
-                                    options=[
-                                        {'label': 'Active stations?', 'value': 'rcy'},
-                                        {'label': '20+ years of record?', 'value': 'rtmy'},
-                                    ],
-                                    value=['rcy'],
-                                    id='record-length-current-check',
-                                )
-                            ], 
-                            className='two columns',
-                        ),
-                        html.Div(
-                            [
-                                #Want to implement a check whether to show the maps with anomalies or not.
-                                dcc.Checklist(
-                                    options=[
-                                        {'label': 'Plot station anomalies?', 'value': 'anomstat'},
-                                    ],
-                                    value=[],
-                                    id='show-anoms-stat',
-                                ),
-                            ], 
-                            className='two columns',
-                        ),
-                        html.Div(
-                            [
-                                html.P("Filter by La Niña/El Niño Strength:"),
-                                dcc.RangeSlider(
-                                    min=-3,
-                                    max=3,
-                                    step=0.1,
-                                    #Range slider with custom marks.
-                                    marks={
-                                        -2.7: {'label': 'Extreme La Niña', 'style': {'color': fillninaline}},
-                                        -1.3: {'label': 'Mod. La Niña', 'style': {'color': fillninaline}},
-                                        -0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
-                                        0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
-                                        1.3: {'label': 'Mod. El Niño', 'style': {'color': fillninoline}},
-                                        2.7: {'label': 'Extreme El Niño', 'style': {'color': fillninoline}}
-                                    },
-                                    value=[startrange[0], startrange[1]],
-                                    updatemode='drag',
-                                    id='oni-range-slider'
-                                ),
-                            ], 
-                            className='eight columns',
-                        ),
-                ]),
-                html.Div(className='row', children=[
-                    html.Div([
-                        dcc.Graph(
-                            id="snow-station-map",
-                            #This is the initil point to draw data for. Clunky way of assigning it...
-                            clickData={'points': [{'text': '3A25P Squamish River Upper<br>Elevation: 1360.0'}]},
-                            #Get rid of the selection buttons in the map because they will confuse with
-                            #The select on click action that's desired.
-                            config={
-                                'modeBarButtonsToRemove': ['pan2d', 'lasso2d', 'select2d']
-                            }
-                        ),
-                    ], className='four columns',),
-                    html.Div([
-                        dcc.Graph(id="snow-station-graph",
-                            config={
-                                'modeBarButtonsToRemove': ['zoom2d', 'pan2d', 'autoScale2d'],
-                                'modeBarButtonsToAdd': ['v1hovermode'],
-                            }
-                        ),
-                    ], className='eight columns'),
-                ]),
+            dbc.Tab([
+                dbc.Row([
+                    dbc.Col([
+                        dbc.Card([
+                            dbc.Row([
+                                dbc.Col([reclengthselect,],),
+                                dbc.Col([anomselect,],),
+                            ]),
+                            snowmap,
+                        ],
+                        className="shadow",
+                        )
+                    ],
+                    width=4,
+                    ),
+                    dbc.Col([
+                        dbc.Card([
+                            slider,
+                            snowgraph
+                        ],
+                        className="shadow",
+                        )
+                    ],
+                    width=8,
+                   )
                 ]
+                ),
+            ],
+            label='ENSO Snow BC',
             ),
-            dcc.Tab(
+            dbc.Tab(
                 label='Analysis',
                 children=[
                     analysis_desc_md(dcc),
                 ]
             ),
-            dcc.Tab(
+            dbc.Tab(
                 label='Help',
                 children=[
                     how_to_md(dcc),
                 ]
             )
         ]
-    ),
+    )]),
     footer_text_md(dcc),
 ])
 
@@ -315,24 +398,6 @@ def update_line_chart(onirange,clickData):
     and filter the master dataframe and the years according to the ONI magnitude
     Then calls a subfunction to create the actual map.
     '''
-    #Here's what the clickData look like:
-    #{'points': [{
-    #   'curveNumber': 0,
-    #   'pointNumber': 123,
-    #   'pointIndex': 123,
-    #   'lon': -128.711028,
-    #   'lat': 55.152028,
-    #   'text': '4B18P Cedar-Kiteen<br>Elevation: 885.0',
-    #   'bbox': {
-    #        'x0': 76.35033446674115,
-    #        'x1': 78.35033446674115,
-    #        'y0': 1802.8100327553746,
-    #        'y1': 1804.8100327553746
-    #   }
-    #}
-    #]
-    #}
-    #
     stnname = clickData['points'][0]['text'].split('<br>')[0]
     subdf = pd.pivot_table(
                 df[[stnname,'hydrological_year','month-day']],
@@ -365,7 +430,10 @@ def update_line_chart(onirange,clickData):
     )
 
 if __name__ == '__main__':
-    snowapp.run(debug=True,port=8059)
+    snowapp.run(debug=True,port=8051)
+
+
+# In[ ]:
 
 
 
