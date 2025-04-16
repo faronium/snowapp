@@ -1,12 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
-
-
-#!/usr/bin/env python
-# coding: utf-8
-
 # # Snow Data
 #
 # Tool to import archived snow data and manipulate it using python pandas. Eventually
@@ -26,10 +20,6 @@ from snowdata import get_wyear_extrema_oni, get_oni_startrange, load_munge_snow_
 from documentation import how_to_md, analysis_desc_md, header_text_md, footer_text_md
 from snowmap import draw_station_map
 from snowplot import snow_lineplot
-
-
-# In[2]:
-
 
 '''
 Author: Faron Anslow
@@ -53,22 +43,8 @@ NAO data URL: https://www.cpc.ncep.noaa.gov/products/precip/CWlink/pna/norm.nao.
 All teleconnections in one! ftp://ftp.cpc.ncep.noaa.gov/wd52dg/data/indices/tele_index.nh
 '''
 
-
-# In[3]:
-
-
 pd.set_option('display.max_rows', 30)
-#df
-
-
-# In[4]:
-
-
 df, stations_with_current_year = load_munge_snow_data()
-
-
-# In[5]:
-
 
 #lets figure out how to make quantiles for each station/day and 
 #compute the percentile amount relative to median for all stations.
@@ -77,10 +53,6 @@ df, stations_with_current_year = load_munge_snow_data()
 
 #We only need the median outside of the line plotting function, 
 #so we can save the full quantile calculation for there. 
-
-
-# In[6]:
-
 
 #Filter the location file by what's in the data file and vice versa so that there is 1:1
 #correspondence between the meta data file and the data file. Let's do this on the location ID
@@ -102,10 +74,6 @@ locdf = locdf.loc[locdf['LCTN_ID'].isin(metastnids),:]
 #    raise
 
 locdf['text'] = locdf['LCTN_ID'] + ' ' + locdf['LCTN_NM'] + '<br>Elevation: ' + (locdf['ELEVATION']).astype(str)
-
-
-# In[7]:
-
 
 # Make a column formatted that gives the hydrological year. Essentially the time index, forward by 3 months,
 # then reformatted to %Y using strftime.
@@ -153,10 +121,6 @@ df['month-day'] = df.index.strftime('%m-%d')
 #Drop all leap years
 df = df.loc[(~(df['month-day']=='02-29')),:]
 
-
-# In[8]:
-
-
 #pd.set_option('display.max_rows', 150)
 #Find the number of years with more than 80% data coverage.
 nyears_complete = (df.groupby(by="hydrological_year").apply(count_coverage,include_groups=False)*100/365 > 80).sum(axis='rows')
@@ -166,20 +130,12 @@ peak_annual_snow = df.iloc[:,:-1].groupby(by="hydrological_year").max()
 peak_annual_snow = peak_annual_snow.iloc[:,:-1]
 historical_median_snow = df.iloc[:,:-2].groupby(by="hydrodoy").mean()
 
-
-# In[9]:
-
-
 #peak_annual_snow
 dftest = df.copy()
 #keep the index
 dates = df.index
 dftest = dftest.set_index(['hydrodoy'],append=True).iloc[:,:-2]
 historical_median_snow = dftest.rolling(window=5,center=True).mean().groupby(level=1).mean()
-
-
-# In[10]:
-
 
 #dftest = dftest.iloc[:,:-3]
 dftest.sort_index(level=['hydrodoy'])
@@ -198,11 +154,6 @@ if (snow_pct_now.index == locdf['LCTN_ID'] + ' ' + locdf['LCTN_NM']).all():
 else:
     None
 
-
-
-# In[11]:
-
-
 mnxonidata = get_wyear_extrema_oni()
 startrange = get_oni_startrange(mnxonidata)
 
@@ -213,10 +164,6 @@ fillninoarea = 'rgba(255,110,95,0.3)'
 fillninoline = 'rgb(255,110,95)'
 fillninaarea = 'rgba(0,175,245,0.3)'
 fillninaline = 'rgb(0,175,245)'
-
-
-# In[35]:
-
 
 snowapp = Dash(__name__,
                   external_stylesheets = [dbc.themes.SANDSTONE],
@@ -430,10 +377,7 @@ def update_line_chart(onirange,clickData):
     )
 
 if __name__ == '__main__':
-    snowapp.run(debug=True,port=8051)
-
-
-# In[ ]:
+    snowapp.run(debug=False)
 
 
 
