@@ -109,12 +109,9 @@ def how_to_md(dcc):
 
 def footer_text_md(dcc):
     return dcc.Markdown(
+        #'''
+        #___
         '''
-        ___
-        #### Author and Contact Information
-        Faron Anslow
-        <faron.anslow@gmail.com>
-
         #### Disclaimer
         This tool is intended for educational or entertainment purposes only. Official analysis of the snow and
         water supply status for British Columbia is available from the
@@ -123,5 +120,9 @@ def footer_text_md(dcc):
         nor is liable for anything associated with or resulting from the use of the app or the underlying data.
         No claims for data correctness or accuracy are made. This application is not affiliated with the Government
         of British Columbia, BC Hydro, Rio Tinto or Metro Vancouver.
+        
+        #### Author and Contact Information
+        Faron Anslow
+        <faron.anslow@gmail.com>
         '''
     )

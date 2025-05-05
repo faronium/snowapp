@@ -19,7 +19,6 @@ def draw_station_map(go,locdfuse,anomstat):
     else:
         markeruse = go.scattermap.Marker(
                 size = 18,
-                colorscale='RdBu',
                 color = 'rgba(0,175,245,0.7)',
                 opacity = 1.,
                 cmin = 25.,

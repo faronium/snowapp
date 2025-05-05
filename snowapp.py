@@ -11,7 +11,7 @@
 
 import pandas as pd
 import numpy as np
-from dash import Dash, html, dcc, Input, Output, callback
+from dash import Dash, html, dcc, Input, Output, callback, State
 import plotly.graph_objects as go
 import dash_bootstrap_components as dbc
 from datetime import datetime
@@ -43,7 +43,6 @@ NAO data URL: https://www.cpc.ncep.noaa.gov/products/precip/CWlink/pna/norm.nao.
 All teleconnections in one! ftp://ftp.cpc.ncep.noaa.gov/wd52dg/data/indices/tele_index.nh
 '''
 
-pd.set_option('display.max_rows', 30)
 df, stations_with_current_year = load_munge_snow_data()
 
 #lets figure out how to make quantiles for each station/day and 
@@ -165,11 +164,69 @@ fillninoline = 'rgb(255,110,95)'
 fillninaarea = 'rgba(0,175,245,0.3)'
 fillninaline = 'rgb(0,175,245)'
 
-snowapp = Dash(__name__,
-                  external_stylesheets = [dbc.themes.SANDSTONE],
-                  title = 'ENSO Snow BC: exploring snow accumulation and El Nino/La Nina in British Columbia'
-              )
+
+# In[13]:
+
+
+# Define color scheme - using a cohesive color palette
+COLORS = {
+    'primary': '#3E92CC',      # Blue
+    'secondary': '#2A628F',    # Darker Blue
+    'success': '#13A76C',      # Green
+    'warning': '#FF934F',      # Orange
+    'danger': '#DB5461',       # Red
+    'info': '#5BC0BE',         # Teal
+    'light': '#F2F4F8',        # Light Gray
+    'dark': '#292F36',         # Dark Gray
+    'bg': '#F2F4F8',           # Light background
+    'text': '#292F36',         # Text color
+}
+
+snowapp = Dash(
+    __name__,
+    external_stylesheets = [dbc.themes.SANDSTONE],
+    meta_tags=[{'name': 'viewport', 'content': 'width=device-width, initial-scale=1'}],
+    title = 'ENSO Snow BC: exploring snow accumulation and El Nino/La Nina in British Columbia',
+)
+
 server = snowapp.server
+
+
+
+
+
+modal = dbc.Modal(
+    [
+        #dbc.ModalHeader(),
+        dbc.ModalBody(
+            [
+                #Call the function to produce the documentation using dcc.markdown
+                dbc.Row([
+                    dbc.Col([
+                        html.H3("Multi-year Snow Water Equivalent Stratified by ENSO Strength", 
+                                className="text-center my-4", 
+                                style={'color': COLORS['dark'], 'font-weight': 'bold'}),
+                        html.P('''This app allows exploration of the strong relationship between the El Niño Southern Oscillation (ENSO) and 
+                            snow accumulation in British Columbia. ENSO is correlated with temperature and precipitation in winter and 
+                            sprin. This relationship partially explains the variability
+                            in the province's snowpack from year to year.'''),
+                        footer_text_md(dcc),
+                    ], width=12)
+                ]),
+                #header_text_md(dcc),
+            ]
+        ),
+        dbc.ModalFooter(
+            dbc.Button("Close", id="close-modal", className="ml-auto")
+        ),
+    ],
+    id="pageload-modal",
+    is_open=True,
+    size="xl",
+
+)
+
+
 
 reclengthselect = html.Div(
     [
@@ -180,10 +237,10 @@ reclengthselect = html.Div(
         #2) Want to allow restriction to records with current year only
         dcc.Checklist(
             options=[
-                {'label': 'Active stations?', 'value': 'rcy'},
-                {'label': '20+ years of record?', 'value': 'rtmy'},
+                {'label': 'Active stations only?', 'value': 'rcy'},
+                {'label': 'require 20 years of record?', 'value': 'rtmy'},
             ],
-            value=['rcy'],
+            value=['rcy', 'rtmy'],
             id='record-length-current-check',
         )
     ],
@@ -210,18 +267,19 @@ slider = html.Div(
             min=-3,
             max=3,
             step=0.1,
-            #Range slider with custom marks.
-            marks={
-                -2.7: {'label': 'Extreme La Niña', 'style': {'color': fillninaline}},
-                -1.3: {'label': 'Mod. La Niña', 'style': {'color': fillninaline}},
-                -0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
-                0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)'}},
-                1.3: {'label': 'Mod. El Niño', 'style': {'color': fillninoline}},
-                2.7: {'label': 'Extreme El Niño', 'style': {'color': fillninoline}}
+           marks={
+                -2.7: {'label': 'Extreme La Niña', 'style': {'color': fillninaline, "fontSize": "14px"}},
+                -1.3: {'label': 'Mod. La Niña', 'style': {'color': fillninaline, "fontSize": "14px"}},
+                -0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)', "fontSize": "14px"}},
+                0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)', "fontSize": "14px"}},
+                1.3: {'label': 'Mod. El Niño', 'style': {'color': fillninoline, "fontSize": "14px"}},
+                2.7: {'label': 'Extreme El Niño', 'style': {'color': fillninoline, "fontSize": "14px"}}
             },
             value=[startrange[0], startrange[1]],
             updatemode='drag',
-            id='oni-range-slider'),
+            id='oni-range-slider',
+            className='mb-4',
+        ),
     ],
 )
 
@@ -235,54 +293,85 @@ snowmap = html.Div(
             #The select on click action that's desired.
             config={
                 'modeBarButtonsToRemove': ['pan2d', 'lasso2d', 'select2d']
-            }
+            },
+            style={'height': "70vh"},
         ),
     ],
 )
 
 snowgraph = html.Div(
     [
-        dcc.Graph(id="snow-station-graph",
+        dcc.Graph(
+            id="snow-station-graph",
             config={
                 'modeBarButtonsToRemove': ['zoom2d', 'pan2d', 'autoScale2d'],
                 'modeBarButtonsToAdd': ['v1hovermode'],
-            }
+            },
+            style={'height': "70vh"}
         ),
     ],
 )
 
-snowapp.layout = html.Div([
-    #Call the function to produce the documentation using dcc.markdown
-    header_text_md(dcc),
-    dbc.Card([dbc.Tabs(
+snowapp.layout = dbc.Container(
+    children=[
+    modal,
+    dbc.Tabs(
         children=[
             dbc.Tab([
                 dbc.Row([
                     dbc.Col([
                         dbc.Card([
-                            dbc.Row([
-                                dbc.Col([reclengthselect,],),
-                                dbc.Col([anomselect,],),
+                            dbc.CardHeader("Snow Pillow Location Map", 
+                               style={'background-color': COLORS['secondary'], 
+                                      'color': 'white', 
+                                      'font-weight': 'bold'}),
+                            dbc.CardBody([
+                                snowmap,
                             ]),
-                            snowmap,
                         ],
                         className="shadow",
                         )
                     ],
-                    width=4,
+                    width=12, lg=4, #className="m-1",
                     ),
                     dbc.Col([
                         dbc.Card([
-                            slider,
-                            snowgraph
+                            dbc.CardHeader("Water-year Snow Water Equivalent", 
+                               style={'background-color': COLORS['secondary'], 
+                                      'color': 'white', 
+                                      'font-weight': 'bold'}),
+                            dbc.CardBody([
+                                snowgraph
+                            ]),
                         ],
                         className="shadow",
                         )
                     ],
-                    width=8,
+                    width=12, lg=8#className="m-1",
                    )
                 ]
                 ),
+                dbc.Row([
+                    dbc.Col([
+                        dbc.Card([
+                            dbc.CardHeader(
+                                "Data Selection Controls", 
+                                style={
+                                    'background-color': COLORS['secondary'], 
+                                    'color': 'white', 
+                                    'font-weight': 'bold'
+                                }
+                            ),
+                            dbc.CardBody([
+                                dbc.Row([
+                                    dbc.Col([reclengthselect,], width=2),
+                                    dbc.Col([anomselect,], width=2),
+                                    dbc.Col([slider,], width=8),
+                                ])
+                            ]),
+                        ])
+                    ], width = 12, className="mt-4",),
+                ]),
             ],
             label='ENSO Snow BC',
             ),
@@ -299,9 +388,22 @@ snowapp.layout = html.Div([
                 ]
             )
         ]
-    )]),
+    ),
     footer_text_md(dcc),
-])
+], id='page-content', fluid=True, style={'background-color': COLORS['bg'], "padding": "20px",})    
+
+# Callback to close the modal
+@snowapp.callback(
+    Output("pageload-modal", "is_open"),
+    Input("close-modal", "n_clicks"),
+    State("pageload-modal", "is_open"),
+)
+def toggle_modal(n_clicks, is_open):
+    if n_clicks:
+        return False
+    return is_open
+
+
 
 @snowapp.callback(
     Output('snow-station-map', 'figure'),
@@ -364,7 +466,7 @@ def update_line_chart(onirange,clickData):
         fillarea = fillninaarea
         fillline = fillninaline
 
-    plottitle="Hydrologic Year SWE for \"{}\" Oceanic Niño Index Range {} to {}".format(stnname,onirange[0],onirange[1])
+    plottitle="Hydrologic Year SWE for {} Oceanic Niño Index Range {} to {}".format(stnname,onirange[0],onirange[1])
     return snow_lineplot(
         go,
         pd,
