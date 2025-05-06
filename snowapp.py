@@ -208,7 +208,7 @@ modal = dbc.Modal(
                                 style={'color': COLORS['dark'], 'font-weight': 'bold'}),
                         html.P('''This app allows exploration of the strong relationship between the El Niño Southern Oscillation (ENSO) and 
                             snow accumulation in British Columbia. ENSO is correlated with temperature and precipitation in winter and 
-                            sprin. This relationship partially explains the variability
+                            spring. This relationship partially explains the variability
                             in the province's snowpack from year to year.'''),
                         footer_text_md(dcc),
                     ], width=12)
