@@ -35,7 +35,7 @@ def draw_station_map(go,locdfuse,anomstat):
             hovertemplate="<b>%{customdata[0]}</b><br><br>"+
             "Station ID: %{customdata[1]}<br>"+
             "Elevation: %{customdata[2]}<br>"+
-            "Current Anomaly: %{customdata[3]:.2f}"+
+            "Current Anomaly: %{customdata[3]:.0f}% of normal"+
             "<extra></extra>",
             marker=markeruse,
             selected = dict(
