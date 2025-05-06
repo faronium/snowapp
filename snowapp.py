@@ -188,7 +188,7 @@ snowapp = Dash(
 server = snowapp.server
 
 
-
+modal_header_image_path = 'assets/20250322_135400_small.jpg'
 
 
 modal = dbc.Modal(
