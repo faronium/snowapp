@@ -164,10 +164,6 @@ fillninoline = 'rgb(255,110,95)'
 fillninaarea = 'rgba(0,175,245,0.3)'
 fillninaline = 'rgb(0,175,245)'
 
-
-# In[13]:
-
-
 # Define color scheme - using a cohesive color palette
 COLORS = {
     'primary': '#3E92CC',      # Blue
@@ -206,6 +202,7 @@ modal = dbc.Modal(
                         html.H3("Multi-year Snow Water Equivalent Stratified by ENSO Strength", 
                                 className="text-center my-4", 
                                 style={'color': COLORS['dark'], 'font-weight': 'bold'}),
+                        html.Div([html.Img(src=modal_header_image_path,className="mb-4", style={'height': '20%', 'width': '20%'})],style={'textAlign': 'center'} ),
                         html.P('''This app allows exploration of the strong relationship between the El Niño Southern Oscillation (ENSO) and 
                             snow accumulation in British Columbia. ENSO is correlated with temperature and precipitation in winter and 
                             spring. This relationship partially explains the variability
@@ -332,7 +329,7 @@ snowapp.layout = dbc.Container(
                         className="shadow",
                         )
                     ],
-                    width=12, lg=4, #className="m-1",
+                    width=12, lg=4, className="mb-4",
                     ),
                     dbc.Col([
                         dbc.Card([
@@ -347,7 +344,7 @@ snowapp.layout = dbc.Container(
                         className="shadow",
                         )
                     ],
-                    width=12, lg=8#className="m-1",
+                    width=12, lg=8, className="mb-4",
                    )
                 ]
                 ),
