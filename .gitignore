@@ -8,3 +8,5 @@ __pycache__/
 .ipynb_checkpoints/
 requirements.txt.backup
 requirements_080425.txt
+snow/cache/
+test_*.py

@@ -16,10 +16,11 @@ import plotly.graph_objects as go
 import dash_bootstrap_components as dbc
 from datetime import datetime
 import time
-from snowdata import get_wyear_extrema_oni, get_oni_startrange, load_munge_snow_data, count_coverage, get_median
+from snowdata import get_wyear_extrema_oni, get_oni_startrange, load_munge_snow_data, count_coverage, get_median, compute_all_indicators
 from documentation import how_to_md, analysis_desc_md, header_text_md, footer_text_md
 from snowmap import draw_station_map
 from snowplot import snow_lineplot
+from snowtrends import create_indicator_timeseries, create_multi_indicator_oni_scatter
 
 '''
 Author: Faron Anslow
@@ -156,6 +157,11 @@ else:
 mnxonidata = get_wyear_extrema_oni()
 startrange = get_oni_startrange(mnxonidata)
 
+# Compute snow indicators for trend analysis
+print("Computing snow indicators for trend analysis...")
+indicators = compute_all_indicators(df, cache_indicators=True)
+print("Indicators ready!")
+
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 currentyear = df[['hydrological_year']].max()
@@ -186,6 +192,9 @@ snowapp = Dash(
 )
 
 server = snowapp.server
+
+# Path to modal header image (served from assets directory)
+modal_header_image_path = '/assets/20250322_135400_small.jpg'
 
 
 
@@ -372,6 +381,46 @@ snowapp.layout = dbc.Container(
             ],
             label='ENSO Snow BC',
             ),
+            dbc.Tab([
+                dbc.Row([
+                    dbc.Col([
+                        dbc.Card([
+                            dbc.CardHeader("Trend Analysis Controls",
+                                style={'background-color': COLORS['secondary'],
+                                       'color': 'white',
+                                       'font-weight': 'bold'}),
+                            dbc.CardBody([
+                                html.Label("Select Visualization Type:"),
+                                dcc.RadioItems(
+                                    id='trend-plot-type',
+                                    options=[
+                                        {'label': ' Timeseries (all indicators)', 'value': 'timeseries'},
+                                        {'label': ' Indicators vs ONI', 'value': 'oni_scatter'}
+                                    ],
+                                    value='timeseries',
+                                    labelStyle={'display': 'block', 'margin': '10px 0'}
+                                ),
+                            ])
+                        ], className="shadow mb-4")
+                    ], width=12, lg=3),
+                    dbc.Col([
+                        dbc.Card([
+                            dbc.CardHeader("Trend Visualization",
+                                style={'background-color': COLORS['secondary'],
+                                       'color': 'white',
+                                       'font-weight': 'bold'}),
+                            dbc.CardBody([
+                                dcc.Graph(
+                                    id='trend-graph',
+                                    style={'height': '80vh'}
+                                )
+                            ])
+                        ], className="shadow")
+                    ], width=12, lg=9)
+                ])
+            ],
+            label='Trends',
+            ),
             dbc.Tab(
                 label='Analysis',
                 children=[
@@ -474,6 +523,39 @@ def update_line_chart(onirange,clickData):
         fillline,
         plottitle=plottitle
     )
+
+@snowapp.callback(
+    Output('trend-graph', 'figure'),
+    Input('trend-plot-type', 'value'),
+    Input('snow-station-map', 'clickData'),
+)
+def update_trend_graph(plot_type, clickData):
+    '''
+    Update the trend graph based on selected plot type and station.
+    '''
+    # Get station name from click data
+    stnname = clickData['points'][0]['text'].split('<br>')[0]
+
+    # Check if station has data in indicators
+    if stnname not in indicators['peak_amount'].columns:
+        # Return empty figure with message
+        fig = go.Figure()
+        fig.add_annotation(
+            text=f"No indicator data available for {stnname}",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=16)
+        )
+        fig.update_layout(height=600)
+        return fig
+
+    # Create appropriate visualization
+    if plot_type == 'timeseries':
+        return create_indicator_timeseries(go, indicators, stnname, mnxonidata)
+    elif plot_type == 'oni_scatter':
+        return create_multi_indicator_oni_scatter(go, indicators, stnname, mnxonidata)
+    else:
+        return go.Figure()
 
 if __name__ == '__main__':
     snowapp.run(debug=False)
