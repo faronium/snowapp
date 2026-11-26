@@ -11,6 +11,7 @@ import os
 import sqlite3
 from datetime import datetime, timezone
 
+import numpy as np
 import pandas as pd
 
 DEFAULT_DB_PATH = os.environ.get(
@@ -209,12 +210,23 @@ def read_stations(con):
 
 
 def read_swe(con):
-    """All observations as a wide DataFrame: one row per date (DatetimeIndex), one column per station_id."""
-    obs = pd.read_sql_query('SELECT station_id, date, swe_mm FROM swe_daily', con)
-    wide = obs.pivot(index='date', columns='station_id', values='swe_mm')
-    wide.index = pd.to_datetime(wide.index)
-    wide.columns.name = None
-    return wide.sort_index()
+    """
+    All observations as a wide DataFrame: one row per date (DatetimeIndex), one column per station_id.
+    Read one station at a time, which keeps peak memory low (fetching all ~800k rows at once as Python
+    objects briefly needs a few hundred MB).
+    """
+    columns = {}
+    station_ids = [row[0] for row in con.execute('SELECT DISTINCT station_id FROM swe_daily ORDER BY station_id')]
+    for sid in station_ids:
+        rows = con.execute(
+            "SELECT CAST(julianday(date) - 2440587.5 AS INTEGER), swe_mm FROM swe_daily "
+            "WHERE station_id = ? ORDER BY date", (sid,)).fetchall()
+        days = np.fromiter((r[0] for r in rows), dtype='int64', count=len(rows))
+        values = np.fromiter((r[1] for r in rows), dtype=float, count=len(rows))
+        columns[sid] = pd.Series(values, index=pd.to_datetime(days, unit='D'))
+    if not columns:
+        return pd.DataFrame(index=pd.DatetimeIndex([]), dtype=float)
+    return pd.DataFrame(columns).sort_index()
 
 
 def read_enso(con):
