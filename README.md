@@ -47,6 +47,14 @@ Settings, all optional:
 |-------------------------|----------------------|--------------------------------------------|
 | `SNOWAPP_DB`            | `./data/snow.sqlite` | Location of the SQLite database            |
 | `SNOWAPP_REFRESH_HOURS` | `3`                  | How often the app checks the sources       |
+| `MAPBOX_TOKEN`          | *(none)*             | Mapbox public token; basemap is OpenStreetMap without it |
+
+**Basemap.** With `MAPBOX_TOKEN` set, the map uses Mapbox Outdoors (raster tiles from the Static Tiles API),
+with the Mapbox wordmark and attribution that Mapbox requires. The token is a public `pk.` token whose
+allowed URLs in the Mapbox account should be `ensosnowbc.ca`, written without `http://` or `https://`.
+A URL that includes a protocol only matches that protocol, and the site is served over https. Mapbox refuses
+tiles to any page not on the list (including `localhost` and the Railway test address), and the map then has
+no basemap. For local development, leave `MAPBOX_TOKEN` unset.
 
 The database can be deleted at any time; it is rebuilt from the sources. To look inside it:
 `sqlite3 data/snow.sqlite "SELECT * FROM source_state"`. The tables are `stations`, `swe_daily`, `enso_index`,
@@ -66,7 +74,7 @@ restart, so the database is rebuilt each time the dyno starts, roughly daily.
 2. Settings → Deploy: set the **Custom Start Command** to `gunicorn snowapp:server`. Railpack would otherwise
    guess a Flask command that points at the wrong module. Set the **Healthcheck Path** to `/healthz`.
 3. Add a **Volume** mounted at `/data`, and the variable `SNOWAPP_DB=/data/snow.sqlite`, so the database
-   survives restarts and deploys.
+   survives restarts and deploys. Add `MAPBOX_TOKEN` for the Mapbox basemap.
 4. Settings → Networking: generate a `*.up.railway.app` domain to test, then add the custom domain.
 
 ### Data notes

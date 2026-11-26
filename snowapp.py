@@ -27,7 +27,7 @@ from dash import Dash, Input, Output, State, dcc, html, no_update
 
 import datastore
 from documentation import analysis_desc_md, footer_text_md, how_to_md
-from snowmap import draw_station_map
+from snowmap import anomaly_legend, draw_station_map, mapbox_wordmark
 from snowplot import snow_lineplot
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
@@ -176,7 +176,11 @@ def make_station_map_graph(default_station):
                 config={'modeBarButtonsToRemove': ['pan2d', 'lasso2d', 'select2d']},
                 style={'height': "70vh"},
             ),
+            # Laid over the map (see assets/map-overlays.css).
+            anomaly_legend(),
+            mapbox_wordmark(),
         ],
+        className='map-wrapper',
     )
 
 
@@ -291,23 +295,27 @@ def toggle_modal(n_clicks, is_open):
 
 @snowapp.callback(
     Output('snow-station-map', 'figure'),
+    Output('anom-legend', 'style'),
     Input('record-length-current-check', 'value'),
     Input('show-anoms-stat', 'value'),
 )
 def make_station_map(reccheck, anomstat):
     '''
     Draw the station map, filtered by the checklist: 'rcy' keeps stations with data in the current
-    water year, 'rtmy' keeps stations with at least MIN_SEASONS_FILTER complete seasons.
+    water year, 'rtmy' keeps stations with at least MIN_SEASONS_FILTER complete seasons. The colour
+    key is shown only when the stations are coloured by anomaly.
     '''
     snap = datastore.current()
     if snap is None:
-        return no_update
+        return no_update, no_update
     stations = snap.stations
     if 'rcy' in reccheck:
         stations = stations[stations['active']]
     if 'rtmy' in reccheck:
         stations = stations[stations['n_seasons'] >= MIN_SEASONS_FILTER]
-    return draw_station_map(stations, show_anomaly=bool(anomstat))
+    show_anomaly = bool(anomstat)
+    legend_style = {'display': 'flex' if show_anomaly else 'none'}
+    return draw_station_map(stations, show_anomaly=show_anomaly), legend_style
 
 
 def station_from_click(click_data, snap):

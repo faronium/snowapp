@@ -52,7 +52,8 @@ def analysis_desc_md(dcc):
         grey line on the graph. Red is below the median and blue is above; the colours stop changing below 25%
         and above 175%. Stations are grey when they have not reported in the last three days, have no complete
         seasons to compare with, or normally have less than 10 mm of snow on that date (early and late in the
-        season), when a percentage would be misleading. Hovering over a station shows the values behind its colour.
+        season), when a percentage would be misleading. A colour key appears in the upper right of the map, and
+        hovering over a station shows the values behind its colour.
         ###### The Relative Oceanic Niño Index
         The Relative Oceanic Niño Index for a given year is taken as the extrema for the winter season of interest.
         The underlying RONI data are over three-month periods and incorporate the seasons OND through MAM.
@@ -114,8 +115,9 @@ def how_to_md(dcc):
         To select a station, zoom in to a station symbol of interest and click on it. The click will
         cause the graph to plot the data for that station and highlight the station in green. Hovering over
         a station shows its elevation and operator, its latest snow water equivalent, and its median for that
-        date with the seasons the median is based on. There are button controls in the upper right corner of
-        the map that allow downloading an image of the current map, zooming in, zooming out or resetting the view.
+        date with the seasons the median is based on. Button controls in the upper left corner of the map
+        (shown when the pointer is over the map) allow zooming in, zooming out, resetting the view or downloading
+        an image of the map.
 
         ###### The Graph
         What is plotted on the graph is dictated by the other app elements and can also be controlled by
