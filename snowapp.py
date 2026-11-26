@@ -23,12 +23,14 @@ Data sources:
 import logging
 
 import dash_bootstrap_components as dbc
+import pandas as pd
 from dash import Dash, Input, Output, State, dcc, html, no_update
 
 import datastore
 from documentation import analysis_desc_md, footer_text_md, how_to_md
 from snowmap import anomaly_legend, draw_station_map, mapbox_wordmark
 from snowplot import snow_lineplot
+from snowtrends import indicator_timeseries, indicator_vs_enso
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
 
@@ -198,6 +200,46 @@ snowgraph = html.Div(
 )
 
 
+def make_trends_tab(snap, default_station):
+    '''The Trends tab: snow season indicators for one station, by water year or against RONI.'''
+    options = [{'label': f"{sid} {row['name']} ({row['n_seasons']} complete seasons)", 'value': sid}
+               for sid, row in snap.stations.iterrows()]
+    return dbc.Tab([
+        dbc.Row([
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardHeader("Snow Season Indicators", style=CARD_HEADER_STYLE),
+                    dbc.CardBody([
+                        html.Label("Station (or click one on the map)"),
+                        dcc.Dropdown(id='trend-station', options=options, value=default_station, clearable=False),
+                        html.Label("View", className='mt-3'),
+                        dcc.RadioItems(
+                            id='trend-view',
+                            options=[{'label': ' Indicators by water year', 'value': 'timeseries'},
+                                     {'label': ' Indicators vs RONI', 'value': 'enso'}],
+                            value='timeseries',
+                            labelStyle={'display': 'block', 'margin': '6px 0'},
+                        ),
+                        html.P(
+                            "Indicators are calculated for each complete season. Trend lines are Theil-Sen slopes "
+                            "with Mann-Kendall significance; lines against RONI are least-squares fits with Pearson "
+                            "correlation. Lines are solid where p < 0.05 and dashed otherwise, and are shown only "
+                            "with at least 10 seasons. Definitions are on the Analysis tab.",
+                            className='small text-muted mt-3 mb-0',
+                        ),
+                    ]),
+                ], className='shadow mb-4'),
+            ], width=12, lg=3),
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardHeader("Indicators", style=CARD_HEADER_STYLE),
+                    dbc.CardBody([dcc.Graph(id='trend-graph', style={'height': '85vh'})]),
+                ], className='shadow mb-4'),
+            ], width=12, lg=9),
+        ]),
+    ], label='Trends')
+
+
 def loading_layout():
     '''Shown until the first data load finishes (about a minute after a restart on a fresh database).'''
     return dbc.Container([
@@ -250,6 +292,7 @@ def serve_layout():
                             ], width=12, className="mt-4"),
                         ]),
                     ], label='ENSO Snow BC'),
+                    make_trends_tab(snap, default_station),
                     dbc.Tab(label='Analysis', children=[analysis_desc_md(dcc)]),
                     dbc.Tab(label='Help', children=[how_to_md(dcc)]),
                 ]
@@ -360,6 +403,39 @@ def update_line_chart(onirange, clickData):
         fillline,
         plottitle=plottitle,
     )
+
+
+# ---------------------------------------------------------------- Trends tab
+
+@snowapp.callback(
+    Output('trend-station', 'value'),
+    Input('snow-station-map', 'clickData'),
+    prevent_initial_call=True,
+)
+def follow_map_click(clickData):
+    '''Clicking a station on the map also selects it on the Trends tab.'''
+    snap = datastore.current()
+    if snap is None:
+        return no_update
+    sid = station_from_click(clickData, snap)
+    return sid if sid in snap.stations.index else no_update
+
+
+@snowapp.callback(
+    Output('trend-graph', 'figure'),
+    Input('trend-station', 'value'),
+    Input('trend-view', 'value'),
+)
+def update_trend_graph(sid, view):
+    snap = datastore.current()
+    if snap is None or sid is None:
+        return no_update
+    indicators = snap.indicators.get(sid, pd.DataFrame())
+    name = snap.stations['name'].get(sid, '')
+    span = snap.stations['span'].get(sid, '')
+    if view == 'enso':
+        return indicator_vs_enso(indicators, snap.enso, f'{sid} {name}: indicators vs RONI ({span})')
+    return indicator_timeseries(indicators, snap.enso, f'{sid} {name}: snow season indicators ({span})')
 
 
 if __name__ == '__main__':

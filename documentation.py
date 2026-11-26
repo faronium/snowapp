@@ -32,10 +32,11 @@ def analysis_desc_md(dcc):
 
         #### Analysis
         ###### Complete Seasons
-        Medians and ranges are calculated only from *complete* seasons: past water years with data on at least
-        95% of the days from 1 October to 16 August. The current season is never included. The legend on the
-        graph and the station details on the map give the number of complete seasons and the years they span,
-        which differ from station to station.
+        Medians, ranges and the snow season indicators are calculated only from *complete* seasons: past water
+        years with data on at least 95% of the days from 1 October to 1 July. The window ends on 1 July so that
+        lower, warmer stations that melt out early still qualify. The current season is never included. The
+        legend on the graph and the station details on the map give the number of complete seasons and the
+        years they span, which differ from station to station.
         ###### Snow Ranges
         The primary elements of the plot are the median snow water equivalent for each day of the water year
         and a range about that median. The range runs from the 15.87th to the 84.13th percentile of the data for
@@ -70,6 +71,35 @@ def analysis_desc_md(dcc):
         ###### Individual Snow Seasons
         The data from the individual years are presented as-is. As described above, the current year's data
         is likely to have spurious values that have not been corrected by quality control software.
+
+        #### Snow Season Indicators (Trends tab)
+        For each complete season at a station:
+
+        * **Peak SWE** and **peak date**: the highest 5-day running mean of snow water equivalent, as measured.
+        * **Snow-on** and **snow-off dates**: the first day of, and the first day after, the longest continuous
+          period with snow water equivalent at least 10 mm above bare ground. The search starts on 1 September,
+          because snow arrives before 1 October at some high stations. Short gaps in the data count as snow
+          when there is snow on both sides.
+        * **Season length**: the days from snow-on to snow-off.
+        * **Peak melt rate**: the largest 5-day mean daily loss of snow water equivalent between the peak and
+          snow-off.
+
+        *Bare ground.* Some snow pillows read a steady value above zero when there is no snow, usually after a
+        recalibration. The bare-ground level is taken from flat stretches of the record (a 7-day standard
+        deviation under 2 mm) in the July to September before the season (for snow-on) and after it (for
+        snow-off). A flat level of 100 mm or more, or one that is both 10 mm or more and a quarter or more of
+        the season's peak, cannot be bare ground and points to a sensor fault, so the dates that depend on it
+        are left out.
+
+        Each value needs data around it (for example, an observed snow-free day just before snow-on), and is
+        left out of the plots when that is missing.
+
+        *Statistics.* A trend is the Theil-Sen slope (the median of the slopes between every pair of seasons),
+        given per decade, with the two-sided Mann-Kendall test for its significance. The relationship with ENSO
+        is a least-squares line against each water year's RONI value, with the Pearson correlation and an
+        approximate two-sided p-value. Both are shown only for indicators with at least 10 seasons, and lines
+        are solid when p < 0.05. Points are coloured by the water year's ENSO phase (RONI of +0.5 or more is
+        El Niño, -0.5 or less is La Niña).
         '''
     )
 
@@ -118,6 +148,13 @@ def how_to_md(dcc):
         date with the seasons the median is based on. Button controls in the upper left corner of the map
         (shown when the pointer is over the map) allow zooming in, zooming out, resetting the view or downloading
         an image of the map.
+
+        ###### The Trends Tab
+        The Trends tab shows snow season indicators (peak snow, snow-on and snow-off dates, season length and
+        peak melt rate) for one station at a time. Choose the station from the list, or click it on the map of
+        the main tab. *Indicators by water year* shows each indicator over time with its trend;
+        *Indicators vs RONI* shows each one against the strength of El Niño or La Niña that year. The
+        definitions and statistics are described on the Analysis tab.
 
         ###### The Graph
         What is plotted on the graph is dictated by the other app elements and can also be controlled by

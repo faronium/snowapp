@@ -16,11 +16,14 @@ _WY_DAY_LOOKUP = np.full(1232, -1)
 for _i, _md in enumerate(WY_MONTH_DAYS):
     _WY_DAY_LOOKUP[int(_md[:2]) * 100 + int(_md[3:])] = _i
 
-# The plot and the season statistics cover the first 321 days of the water year (1 October to 16 August),
-# which takes in the end of melt at nearly every station while ignoring summer gaps in the data.
-SEASON_DAYS = 321
+# The water-year plot runs from 1 October to 16 August (the first 321 days), past the end of melt at nearly
+# every station.
+PLOT_DAYS = 321
 
-# A season is "complete", and used for medians and ranges, if it has data on at least this fraction of those days.
+# A season is "complete" (used for medians, ranges, the map's normals and the Trends indicators) if it has data on
+# at least COMPLETE_FRACTION of the days from 1 October to 1 July. The window stops at 1 July so that low, warm
+# stations that melt out early still qualify; stations keep reporting (zeros, or a steady offset) after melt-out.
+COMPLETE_DAYS = WY_MONTH_DAYS.index('07-01') + 1
 COMPLETE_FRACTION = 0.95
 
 # When the median SWE for the date is below this (mm), a percent of median is not meaningful and isn't shown.
@@ -65,8 +68,8 @@ def season_matrix(series):
 
 
 def complete_seasons(matrix, exclude=()):
-    """Water years in a season_matrix with data on at least COMPLETE_FRACTION of the first SEASON_DAYS days."""
-    coverage = matrix.iloc[:SEASON_DAYS].notna().mean()
+    """Water years in a season_matrix with data on at least COMPLETE_FRACTION of the days from 1 Oct to 1 Jul."""
+    coverage = matrix.iloc[:COMPLETE_DAYS].notna().mean()
     return [int(wy) for wy in coverage.index[coverage >= COMPLETE_FRACTION] if wy not in exclude]
 
 

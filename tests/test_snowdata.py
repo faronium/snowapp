@@ -42,7 +42,7 @@ def test_season_matrix_places_a_partial_season_on_the_right_days():
 def test_complete_seasons_threshold_and_exclusion():
     full = daily('2020-10-01', '2021-09-30')
     gappy = daily('2021-10-01', '2022-09-30')
-    gappy.iloc[:30] = np.nan                       # 291 of the first 321 days: 90.7%, below 95%
+    gappy.iloc[:30] = np.nan                       # 244 of the 274 days to 1 July: 89%, below 95%
     current = daily('2022-10-01', '2023-09-30')
     m = sd.season_matrix(pd.concat([full, gappy, current]))
     assert sd.complete_seasons(m) == [2021, 2023]

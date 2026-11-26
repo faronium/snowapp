@@ -22,6 +22,7 @@ import pandas as pd
 import ingest
 import snowdata
 import snowdb
+import snowindicators
 
 log = logging.getLogger('snowapp.datastore')
 
@@ -37,6 +38,7 @@ class Snapshot:
     stations: pd.DataFrame          # one row per station with data and a location (index: station_id)
     matrices: dict                  # station_id -> season_matrix (day of water year x water year)
     complete: dict                  # station_id -> list of complete past seasons (used for medians and ranges)
+    indicators: dict                # station_id -> snow season indicators by water year (Trends tab)
     current_wy: int
     data_through: pd.Timestamp      # newest date in the snow data
     enso: pd.Series                 # ENSO value per water year
@@ -58,6 +60,7 @@ def build_snapshot(con):
     complete = {sid: snowdata.complete_seasons(m, exclude=[current_wy]) for sid, m in matrices.items()}
     medians, info = snowdata.station_climatologies(matrices, current_wy)
     anomalies = snowdata.current_anomalies(swe, medians)
+    indicators = {sid: snowindicators.station_indicators(swe[sid], complete[sid]) for sid in swe.columns}
 
     stations = snowdb.read_stations(con).set_index('station_id')
     stations = stations.join(info).join(anomalies)
@@ -73,6 +76,7 @@ def build_snapshot(con):
         stations=stations,
         matrices=matrices,
         complete=complete,
+        indicators=indicators,
         current_wy=current_wy,
         data_through=swe.index.max(),
         enso=snowdata.enso_by_water_year(enso),

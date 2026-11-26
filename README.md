@@ -17,7 +17,8 @@ BC snow data, station metadata, CPC RONI
 SQLite database (snowdb.py)                ./data/snow.sqlite, or $SNOWAPP_DB
         │  datastore.py: in-memory snapshot, rebuilt when the data change
         ▼
-Dash app (snowapp.py) ── snowmap.py, snowplot.py (figures) ── snowdata.py (analysis)
+Dash app (snowapp.py) ── snowmap.py, snowplot.py, snowtrends.py (figures)
+                      ── snowdata.py, snowindicators.py (analysis)
 ```
 
 * **`ingest.py`** fetches each source with a conditional GET, so a check that finds nothing new costs one small
@@ -28,6 +29,8 @@ Dash app (snowapp.py) ── snowmap.py, snowplot.py (figures) ── snowdata.p
   takes about a minute, and the page shows a "loading" message that reloads by itself.
 * **`snowdata.py`** holds the analysis: water years, complete seasons, medians and ranges, current anomalies, and
   ENSO values by water year. These are plain functions of pandas objects, covered by the tests.
+* **`snowindicators.py`** derives the snow season indicators and their trend and ENSO statistics for the Trends
+  tab, from the same in-memory data, each time the data change.
 * **`snowapp.ipynb`** is a scratch notebook that imports the modules for exploring the data. The app doesn't use it.
 
 ### Running locally
@@ -85,10 +88,19 @@ restart, so the database is rebuilt each time the dyno starts, roughly daily.
 * **Daily values**: BC reports at 16:00 UTC. A few stations report at other times: the Forrest Kerr pillows at
   00:00 UTC, and some stations hourly for parts of their record. Each reading is assigned to the nearest 16:00 UTC
   report time, and the reading closest to 16:00 is kept for each station and day.
-* **Complete seasons**: a past water year with data on at least 95% of the days from 1 October to 16 August.
-  Medians, ranges and the "20 complete seasons" filter use only these. The current season is never included.
+* **Complete seasons**: a past water year with data on at least 95% of the days from 1 October to 1 July.
+  Medians, ranges, the map's normals, the "20 complete seasons" filter and the Trends indicators use only
+  these. The current season is never included.
 * **Map anomaly**: a station's latest reading from the last 3 days of data, as a percentage of its median for that
   date. Stations are grey when the median is under 10 mm, or when there is no recent reading or no complete season.
+* **Snow season indicators** (Trends tab, `snowindicators.py`):
+  * *Peak:* the highest 5-day running mean.
+  * *Snow-on and snow-off:* the ends of the longest continuous period at least 10 mm above bare ground. The
+    search starts 1 September. Bare ground comes from flat late-summer stretches, so sensor offsets are
+    handled, and an implausible level marks a sensor fault.
+  * *Peak melt rate:* the largest 5-day mean daily loss between peak and snow-off.
+  * *Trends:* Theil-Sen slopes with Mann-Kendall significance. *ENSO relationship:* Pearson correlation with RONI.
+  * Both are shown only with at least 10 seasons.
 * **Water-year roll-over**: BC restarts `SWDaily.csv` on 1 October but adds the finished water year to the archive
   weeks later (21 November in 2026). The database keeps the finished year's data in the meantime.
 

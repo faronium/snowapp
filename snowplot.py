@@ -3,7 +3,7 @@ The water-year SWE line plot for one station.
 """
 import plotly.graph_objects as go
 
-from snowdata import QUANTILES, SEASON_DAYS, season_quantiles, season_span
+from snowdata import PLOT_DAYS, QUANTILES, season_quantiles, season_span
 
 # Ranges are only drawn when at least this many complete seasons are available.
 MIN_SEASONS_FOR_RANGE = 5
@@ -31,7 +31,7 @@ def snow_lineplot(matrix, complete_seasons, selected_years, current_wy, fillarea
     current_wy:        the current water year, always drawn in black
     fillarea/fillline: colours for the ENSO-selected range and median
     """
-    m = matrix.iloc[:SEASON_DAYS]
+    m = matrix.iloc[:PLOT_DAYS]
     x = m.index
     selected = set(int(y) for y in selected_years)
     selected_complete = [wy for wy in complete_seasons if wy in selected]
