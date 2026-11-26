@@ -72,12 +72,21 @@ def load_munge_snow_data():
 
     return df, stations_with_current_year
 
-#Import oceanic Nino index and massage into a form that allows selection by ENSO strength
-def get_wyear_extrema_oni():
-    onidata = read_fwf('https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt')
-    #onidata = read_fwf('./snow/oni.ascii.txt')
+#CPC switched its official ENSO index from the Oceanic Nino Index (ONI) to the Relative ONI (RONI)
+#on 1 February 2026. RONI is Nino 3.4 SST anomaly relative to the tropical mean SST anomaly, rescaled
+#to ONI's amplitude, so the usual +/-0.5 thresholds still apply. Columns are SEAS, YR, ANOM.
+RONI_URL = 'https://www.cpc.ncep.noaa.gov/data/indices/RONI.ascii.txt'
+
+#Import the relative oceanic Nino index and massage into a form that allows selection by ENSO strength
+def get_wyear_extrema_oni(url=RONI_URL):
+    '''
+    Returns (mnxonidata, latest): the per-water-year ENSO index extremum used to filter years,
+    and the most recent 3-month-season value, which is used to pick the slider's starting range.
+    '''
+    onidata = read_fwf(url)
+    latest = onidata['ANOM'].dropna().iloc[-1]
     oniseaslist = list(['OND','NDJ','DJF','JFM','FMA','MAM'])
-    onidata = onidata[onidata['SEAS'].isin(oniseaslist)]
+    onidata = onidata[onidata['SEAS'].isin(oniseaslist)].copy()
     #Need to add a year to the OND and NDJ seasoned years to correspond to the hydrological year that ENSO cycle belongs to.
     onidata['YR'] = onidata['YR'].mask(onidata['SEAS'].isin(['OND','NDJ']),onidata['YR']+1)
 
@@ -100,13 +109,17 @@ def get_wyear_extrema_oni():
     maxmap = maxmaxmap | keepmaxmap
     mnxonidata.loc[minmap,'ANOM'] = mnxonidata.loc[minmap,'MIN_ANOM']
     mnxonidata.loc[maxmap,'ANOM'] = mnxonidata.loc[maxmap,'MAX_ANOM']
-    #Get most recent ONI and use this to set pick an ONI range to use in the slider initially.
-    return mnxonidata
+    return mnxonidata, latest
 
-def get_oni_startrange(mnxonidata):
-    if mnxonidata.loc[mnxonidata.index[(len(mnxonidata)-1)],"ANOM"] > 0.5:
+def get_oni_startrange(latest):
+    '''
+    Initial slider range from the most recent seasonal ENSO index value, using CPC's +/-0.5 thresholds.
+    Uses the latest season rather than the last completed water year so the app opens on the
+    ENSO state that is developing now.
+    '''
+    if latest >= 0.5:
         return [0.5,3]
-    elif mnxonidata.loc[mnxonidata.index[(len(mnxonidata)-1)],"ANOM"] < 0.5:
+    elif latest <= -0.5:
         return [-3,-0.5]
     else:
         return [-0.5,0.5]

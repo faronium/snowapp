@@ -31,11 +31,11 @@ def draw_station_map(go,locdfuse,anomstat):
             lat = locdfuse['LATITUDE'],
             text = locdfuse['text'],
             mode = 'markers',
-            customdata=locdfuse[['LCTN_NM','LCTN_ID','ELEVATION','pct_snow']],
+            customdata=locdfuse[['LCTN_NM','LCTN_ID','ELEVATION','pct_text']],
             hovertemplate="<b>%{customdata[0]}</b><br><br>"+
             "Station ID: %{customdata[1]}<br>"+
             "Elevation: %{customdata[2]}<br>"+
-            "Current Anomaly: %{customdata[3]:.0f}% of normal"+
+            "Current Anomaly: %{customdata[3]}"+
             "<extra></extra>",
             marker=markeruse,
             selected = dict(

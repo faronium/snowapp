@@ -37,7 +37,8 @@ patterns.
 
 Sources for snow data and teleconnection index values.
 Snow data URL: https://www.env.gov.bc.ca/wsd/data_searches/snow/asws/data/
-ONI data URL: https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt
+RONI data URL: https://www.cpc.ncep.noaa.gov/data/indices/RONI.ascii.txt
+  (CPC switched its official ENSO index from ONI to the Relative ONI on 1 Feb 2026.)
 PNA data URL: https://www.cpc.ncep.noaa.gov/products/precip/CWlink/pna/norm.pna.monthly.b5001.current.ascii
 NAO data URL: https://www.cpc.ncep.noaa.gov/products/precip/CWlink/pna/norm.nao.monthly.b5001.current.ascii
 All teleconnections in one! ftp://ftp.cpc.ncep.noaa.gov/wd52dg/data/indices/tele_index.nh
@@ -141,20 +142,40 @@ dftest.sort_index(level=['hydrodoy'])
 #pd.set_option('display.max_rows', None)
 #dftest.loc[(slice(None),1),:]
 pd.set_option('display.max_rows', 30)
-snow_pct_median = 100*(dftest/historical_median_snow)
-snow_pct_median.replace([np.inf], 399, inplace=True)
-snow_pct_median[snow_pct_median > 399] = 400
-snow_pct_now = snow_pct_median.iloc[-1:,].reset_index(drop=True).T #=range(126) #= snow_pct_median.iloc[-1:,].T
 
+# Current anomaly for each station, taken from that station's most recent valid observation
+# in the last few days. Using only the newest row of the table was fragile: that row is often
+# only partly filled (BC posts the 16:00 UTC row before most stations have reported, and the
+# Forrest Kerr stations' 00:00 UTC readings get shifted into it), which left most stations
+# with no anomaly and the map showing "0% of normal" everywhere.
+RECENT_DAYS = 3
+obsdates = dftest.index.get_level_values(0)
+recent_obs = dftest.loc[obsdates > obsdates.max() - pd.Timedelta(days=RECENT_DAYS)]
+current_anom = {}
+for stn in recent_obs.columns:
+    valid = recent_obs[stn].dropna()
+    if valid.empty:
+        current_anom[stn] = (np.nan, 'no reading in the last {} days'.format(RECENT_DAYS))
+        continue
+    (obsdate, obshdoy), swe = valid.index[-1], valid.iloc[-1]
+    normal = historical_median_snow.at[obshdoy, stn]
+    if pd.isna(normal):
+        current_anom[stn] = (np.nan, 'no normal available')
+    elif normal == 0:
+        current_anom[stn] = (np.nan, 'no snow; normally none on this date') if swe == 0 else \
+                            (400., 'snow present; normally none on this date')
+    else:
+        pct = 100*swe/normal
+        current_anom[stn] = (min(pct, 400.), '{:.0f}% of normal ({})'.format(pct, obsdate.strftime('%d %b')))
+current_anom = pd.DataFrame.from_dict(current_anom, orient='index', columns=['pct_snow', 'pct_text'])
 
-#check to see if we have a 1:1 match of the current snow percentage with the locations dataframe
-if (snow_pct_now.index == locdf['LCTN_ID'] + ' ' + locdf['LCTN_NM']).all():
-    locdf['pct_snow'] = snow_pct_now.iloc[:,0].values
-else:
-    None
+# Attach to the station metadata by station name rather than relying on matching row order.
+stnkey = locdf['LCTN_ID'] + ' ' + locdf['LCTN_NM']
+locdf['pct_snow'] = stnkey.map(current_anom['pct_snow'])
+locdf['pct_text'] = stnkey.map(current_anom['pct_text']).fillna('no data')
 
-mnxonidata = get_wyear_extrema_oni()
-startrange = get_oni_startrange(mnxonidata)
+mnxonidata, latest_enso = get_wyear_extrema_oni()
+startrange = get_oni_startrange(latest_enso)
 
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
@@ -454,8 +475,8 @@ def update_line_chart(onirange,clickData):
     #The pivot re-orders the intex. 
     #need to stack the bottom onto the top to make a hydrological year
     subdf = pd.concat([subdf.iloc[-92:,:],subdf.iloc[0:(366-92):,]],axis=0)
-    yearsuse = mnxonidata.index[(mnxonidata["ANOM"] > onirange[0]) &
-        (mnxonidata["ANOM"] < onirange[1])].unique()
+    yearsuse = mnxonidata.index[(mnxonidata["ANOM"] >= onirange[0]) &
+        (mnxonidata["ANOM"] <= onirange[1])].unique()
     if ((onirange[0] + onirange[1])/2 > 0):
         fillarea = fillninoarea
         fillline = fillninoline
@@ -463,7 +484,7 @@ def update_line_chart(onirange,clickData):
         fillarea = fillninaarea
         fillline = fillninaline
 
-    plottitle="Hydrologic Year SWE for {} Oceanic Niño Index Range {} to {}".format(stnname,onirange[0],onirange[1])
+    plottitle="Hydrologic Year SWE for {}, Relative Oceanic Niño Index (RONI) {} to {}".format(stnname,onirange[0],onirange[1])
     return snow_lineplot(
         go,
         pd,
