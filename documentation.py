@@ -31,13 +31,28 @@ def analysis_desc_md(dcc):
         warming of tropical oceans.
 
         #### Analysis
+        ###### Complete Seasons
+        Medians and ranges are calculated only from *complete* seasons: past water years with data on at least
+        95% of the days from 1 October to 16 August. The current season is never included. The legend on the
+        graph and the station details on the map give the number of complete seasons and the years they span,
+        which differ from station to station.
         ###### Snow Ranges
-        The primary elements of the plot are median snow water equivalent grouping by day of the hydrological year
-        and range about that median expressed as one standard deviation of the data for that hydrological day.
-        A trace and range are shown for each of the full record (in grey) and for the record subset by the selected
-        ENSO strength colorized with reds showing selections with ENSO positive (El Niño) overall and
-        blues for selections with ENSO negative (La Niña). For example, if the RONI range is -0.5 to 2, the
+        The primary elements of the plot are the median snow water equivalent for each day of the water year
+        and a range about that median. The range runs from the 15.87th to the 84.13th percentile of the data for
+        that day, which covers the same share of the data as one standard deviation either side of the mean would
+        for normally distributed data, but is taken directly from the data. Ranges are only shown when at least
+        five complete seasons are available.
+        A median and range are shown for each of the full record (in grey) and for the seasons selected by
+        ENSO strength, coloured red for selections that are ENSO positive (El Niño) overall and
+        blue for selections that are ENSO negative (La Niña). For example, if the RONI range is -0.5 to 2, the
         midpoint of the range is 0.75 and thus the plot of the subset will be red in color.
+        ###### Map Colours
+        With *Plot station anomalies?* ticked, each station is coloured by its most recent snow water equivalent
+        (from the last three days of data) as a percentage of its median for that date, the same median as the
+        grey line on the graph. Red is below the median and blue is above; the colours stop changing below 25%
+        and above 175%. Stations are grey when they have not reported in the last three days, have no complete
+        seasons to compare with, or normally have less than 10 mm of snow on that date (early and late in the
+        season), when a percentage would be misleading. Hovering over a station shows the values behind its colour.
         ###### The Relative Oceanic Niño Index
         The Relative Oceanic Niño Index for a given year is taken as the extrema for the winter season of interest.
         The underlying RONI data are over three-month periods and incorporate the seasons OND through MAM.
@@ -72,18 +87,21 @@ def how_to_md(dcc):
         snow amount over the water year that runs from 1 October through 30 September in the
         subsequent year. User controls are:
 
-        * a **checklist** in the upper left to subset data to that with current year data and that with more than 20 years;
-        * a **slider** in the upper right that allows for the selection of a range of values of the ENSO strength;
+        * **checkboxes** in the controls panel below the map to choose which stations are shown and how they are coloured;
+        * a **slider** in the controls panel that allows for the selection of a range of values of the ENSO strength;
         * a **map** that shows the location of snow-pillow sites in BC;
         * a **graph** that plots the snow water equivalent for the hydrological year.
 
-        ###### The Checklist
-        The checklist contains two items whose selection causes the stations available for plotting to be
-        subset. By default, the *Require current year?* option is selected to show stations that have data for
-        the current year. The second option allows the restriction of available data to those stations with 20 or more
-        years of record. Furthermore, a station is considered to have data for a given year only if the timeseries
-        more than 80% complete. These longer, more complete records are recommended for investigating the ENSO/snow
-        relationship for a given station.
+        The line at the bottom of the controls panel shows how recent the snow and RONI data are. The app checks
+        its sources for new data every few hours.
+
+        ###### The Checkboxes
+        The first two checkboxes subset the stations shown on the map. *Active stations only?* shows stations
+        that have data for the current water year. *Require 20 complete seasons?* shows only stations with
+        at least 20 complete seasons (see the Analysis tab). These longer, more complete records are recommended
+        for investigating the ENSO/snow relationship for a given station. Both are selected by default.
+        *Plot station anomalies?* colours each station by its current snow water equivalent as a percentage
+        of its median for the date, as described on the Analysis tab.
 
         ###### The ENSO Slider
         The slider allows for the selection of a range of values of the ENSO strength as
@@ -94,18 +112,21 @@ def how_to_md(dcc):
 
         ###### The Map
         To select a station, zoom in to a station symbol of interest and click on it. The click will
-        cause the graph to plot the data for that station and highlight the station in red. There
-        are four button controls in the upper right corner of the map that allow downloading an
-        image of the current map, zooming in, zooming out or resetting the axes.
+        cause the graph to plot the data for that station and highlight the station in green. Hovering over
+        a station shows its elevation and operator, its latest snow water equivalent, and its median for that
+        date with the seasons the median is based on. There are button controls in the upper right corner of
+        the map that allow downloading an image of the current map, zooming in, zooming out or resetting the view.
 
         ###### The Graph
         What is plotted on the graph is dictated by the other app elements and can also be controlled by
-        interacting with the two legends. The legend in the upper-left of the plot controls the
-        presentation of the median and range curves for the station. The legend below the
+        interacting with the legends. The legend in the upper-left of the plot controls the
+        presentation of the median and range curves for the station; the median entries give the number of
+        complete seasons behind each median. The legend in the upper right adds other percentiles of the
+        full record. The legend below the
         graph's axes controls the plotting of individual years. Clicking on a legend entry turns the element
         on or off. Double clicking turns all elements on or all but the clicked entry off. Finally, the graph and maps
         can both be zoomed into to modify the range of what is plotted. Additional controls in the upper right of
-        the graph alow one to download an image of the current plot, reset the axes or choose a graph
+        the graph allow one to download an image of the current plot, reset the axes or choose a graph
         selection method.
         '''
     )

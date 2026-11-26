@@ -1,161 +1,175 @@
-from os.path import isfile
-from pandas import read_csv, read_fwf, concat, Timedelta
+"""
+Analysis functions for the ENSO Snow BC app: water-year bookkeeping, per-station climatology, current
+anomalies, and assignment of ENSO index values to water years.
+
+These are plain functions of pandas objects, separate from data loading (ingest.py, snowdb.py) and from
+the Dash app, so they can be tested and used from the notebook.
+"""
 import numpy as np
+import pandas as pd
 
-def get_snow_archive(localfilename=None):
-    #One possible filename: ./snow/SW_DailyArchive.csv
-    #Here the [0] tells fxn to parse first column into an index
-    if localfilename is None:
-        dfarch = read_csv('https://www.env.gov.bc.ca/wsd/data_searches/snow/asws/data/SW_DailyArchive.csv',index_col=[0],parse_dates=[0]) 
-    else:
-        if isfile(localfilename):
-            dfarch = read_csv(localfilename,index_col=[0],parse_dates=[0])
+# Day labels ('MM-DD') for a water year, 1 October to 30 September. 29 February is dropped so that every
+# season has the same 365 days and a given label is the same calendar day in every year.
+WY_MONTH_DAYS = pd.date_range('2001-10-01', '2002-09-30').strftime('%m-%d').tolist()
+# Position in WY_MONTH_DAYS, looked up by month * 100 + day.
+_WY_DAY_LOOKUP = np.full(1232, -1)
+for _i, _md in enumerate(WY_MONTH_DAYS):
+    _WY_DAY_LOOKUP[int(_md[:2]) * 100 + int(_md[3:])] = _i
+
+# The plot and the season statistics cover the first 321 days of the water year (1 October to 16 August),
+# which takes in the end of melt at nearly every station while ignoring summer gaps in the data.
+SEASON_DAYS = 321
+
+# A season is "complete", and used for medians and ranges, if it has data on at least this fraction of those days.
+COMPLETE_FRACTION = 0.95
+
+# When the median SWE for the date is below this (mm), a percent of median is not meaningful and isn't shown.
+LOW_SNOW_MM = 10.0
+
+# A station's current anomaly uses its latest reading from the most recent RECENT_DAYS days of data.
+RECENT_DAYS = 3
+
+# Quantiles shown on the plot. 0.1587-0.8413 spans the same probability as +/-1 standard deviation of a
+# normal distribution, but is computed directly from the data.
+QUANTILES = [0.05, 0.1587, 0.25, 0.5, 0.75, 0.8413, 0.95]
+
+# 3-month ENSO seasons that overlap the snow season. OND and NDJ belong to the water year that starts in
+# that October, which is labelled by the following calendar year.
+ENSO_SNOW_SEASONS = ['OND', 'NDJ', 'DJF', 'JFM', 'FMA', 'MAM']
+ENSO_SEASON_ORDER = ['DJF', 'JFM', 'FMA', 'MAM', 'AMJ', 'MJJ', 'JJA', 'JAS', 'ASO', 'SON', 'OND', 'NDJ']
+
+
+# ---------------------------------------------------------------- water years and seasons
+
+def water_year(dates):
+    """Water year (1 October to 30 September) of each date, labelled by the calendar year in which it ends."""
+    dates = pd.DatetimeIndex(dates)
+    return pd.Index(dates.year + (dates.month >= 10).astype(int), name='water_year')
+
+
+def season_matrix(series):
+    """
+    Reshape one station's daily SWE series (DatetimeIndex) into a table with a row for each day of the
+    water year (WY_MONTH_DAYS, 1 October first) and a column for each water year that has data. Days without
+    data are NaN, so partial seasons, such as the current one, line up on the right dates.
+    """
+    s = series.dropna()
+    s = s[~((s.index.month == 2) & (s.index.day == 29))]
+    if s.empty:
+        return pd.DataFrame(index=pd.Index(WY_MONTH_DAYS), dtype=float)
+    day = _WY_DAY_LOOKUP[s.index.month * 100 + s.index.day]
+    years, year_pos = np.unique(water_year(s.index).to_numpy(), return_inverse=True)
+    values = np.full((len(WY_MONTH_DAYS), len(years)), np.nan)
+    values[day, year_pos] = s.to_numpy()
+    return pd.DataFrame(values, index=pd.Index(WY_MONTH_DAYS), columns=pd.Index(years.astype(int)))
+
+
+def complete_seasons(matrix, exclude=()):
+    """Water years in a season_matrix with data on at least COMPLETE_FRACTION of the first SEASON_DAYS days."""
+    coverage = matrix.iloc[:SEASON_DAYS].notna().mean()
+    return [int(wy) for wy in coverage.index[coverage >= COMPLETE_FRACTION] if wy not in exclude]
+
+
+def season_quantiles(matrix, seasons, quantiles=QUANTILES):
+    """For each day of the water year, the given quantiles across the given seasons (columns are the quantiles)."""
+    if len(seasons) == 0:
+        return pd.DataFrame(np.nan, index=matrix.index, columns=quantiles)
+    return matrix[list(seasons)].quantile(quantiles, axis=1, interpolation='midpoint').T
+
+
+def season_span(seasons):
+    """'24 seasons, 1991-2026' style description of a list of water years."""
+    if not seasons:
+        return 'no complete seasons'
+    n = len(seasons)
+    return f'{n} season{"s" if n != 1 else ""}, {min(seasons)}–{max(seasons)}'
+
+
+# ---------------------------------------------------------------- climatology and anomalies
+
+def station_climatologies(matrices, current_wy):
+    """
+    For each station (dict of station_id -> season_matrix): the median SWE for each day of the water year
+    across the station's complete seasons, excluding the current one. This is the same median drawn as the
+    grey line on the plot.
+
+    Returns (medians, info): medians is a DataFrame (day of water year x station); info is indexed by
+    station with n_seasons, first_season, last_season and span (text for display).
+    """
+    medians, info = {}, {}
+    for sid, matrix in matrices.items():
+        seasons = complete_seasons(matrix, exclude=[current_wy])
+        medians[sid] = matrix[seasons].median(axis=1) if seasons else pd.Series(np.nan, index=matrix.index)
+        info[sid] = {
+            'n_seasons': len(seasons),
+            'first_season': min(seasons) if seasons else None,
+            'last_season': max(seasons) if seasons else None,
+            'span': season_span(seasons),
+        }
+    medians = pd.DataFrame(medians, index=WY_MONTH_DAYS)
+    info = pd.DataFrame.from_dict(info, orient='index')
+    return medians, info
+
+
+def current_anomalies(swe, medians, recent_days=RECENT_DAYS, low_snow_mm=LOW_SNOW_MM):
+    """
+    Each station's latest reading from the most recent `recent_days` days of `swe` (wide: date x station),
+    compared with that station's median for the same day of the water year.
+
+    Returns a DataFrame indexed by station: obs_date, swe_mm, median_mm, pct_of_median and anom_status, which
+    is 'ok', 'no_recent' (no reading in the window), 'no_median' (no complete seasons to compare
+    with) or 'low_snow' (median below low_snow_mm, so no percentage is given).
+    """
+    recent = swe[swe.index > swe.index.max() - pd.Timedelta(days=recent_days)]
+    rows = {}
+    for sid in swe.columns:
+        valid = recent[sid].dropna()
+        if valid.empty:
+            rows[sid] = (pd.NaT, np.nan, np.nan, np.nan, 'no_recent')
+            continue
+        obs_date, value = valid.index[-1], float(valid.iloc[-1])
+        md = obs_date.strftime('%m-%d')
+        md = '02-28' if md == '02-29' else md
+        median = medians[sid].get(md, np.nan) if sid in medians.columns else np.nan
+        if pd.isna(median):
+            rows[sid] = (obs_date, value, np.nan, np.nan, 'no_median')
+        elif median < low_snow_mm:
+            rows[sid] = (obs_date, value, median, np.nan, 'low_snow')
         else:
-            raise FileNotFoundError(f'File {localfilename} could not be found')
-    
-    return dfarch
-
-def get_fresh_snow(localfilename=None):
-    #One possible filename:  ./snow/SWDaily.csv
-    if localfilename is None:
-        dffresh = read_csv('https://www.env.gov.bc.ca/wsd/data_searches/snow/asws/data/SWDaily.csv',index_col=[0],parse_dates=[0])
-    else:
-        if isfile(localfilename):
-            dffresh = read_csv(localfilename,index_col=[0],parse_dates=[0])
-        else:
-            raise FileNotFoundError(f'File {localfilename} could not be found')
-
-    return dffresh
-
-def load_munge_snow_data():
-    dfarch = get_snow_archive()
-    dffresh = get_fresh_snow()
-    df = concat([dfarch,dffresh],axis=0)
-
-    #Check current year's data for entries with all na/no data
-    if (dffresh.isna().sum() == len(dffresh)).any():
-        #Have stations with all rows of na, must subset dffresh to remove those stations.
-        print('hi')
-        stations_with_current_year = dffresh.columns[~(dffresh.isna().sum() == len(dffresh))]
-    else:
-        stations_with_current_year = dffresh.columns[~(dffresh.isna().sum() == len(dffresh))]
-
-    # ## Munging data to consistent timestamps and getting some useful indexes
-    '''
-    Looks like there are stations that have data at a non-standard time of 16:00. Six stations that have 
-    data on the even hour at some point in their record. These are '1A02P McBride Upper', '1B02P Tahtsa Lake', 
-    '1B08P Mt. Pondosy', '2F18P Brenda Mine', '3A25P Squamish River Upper', '3A28P Tetrahedron'. In all of 
-    these stations, the hourly data is in addition to the data reported at 16:00. So, can safely drop all 
-    of the excess data without worry.
-    '''
-    #Deal with the non-daily observations. Most are on the 16:00, some are on the 00:00 and others are on the even hour.
-    #Set the rows with hours != 16:00 to NaN for stations '1A02P McBride Upper', '1B02P Tahtsa Lake', '1B08P Mt. Pondosy', '2F18P Brenda Mine',
-    #         '3A25P Squamish River Upper', '3A28P Tetrahedron']
-    df.loc[df.index.strftime('%H').isin(['00','01','02','03','04','05','06','07','08','09','10','11',
-            '12','13','14','15','17','18','19','20','21','22','23']),
-            ['1A02P McBride Upper', '1B02P Tahtsa Lake', '1B08P Mt. Pondosy', '2F18P Brenda Mine',
-             '3A25P Squamish River Upper', '3A28P Tetrahedron']] = np.nan
-
-    ''' Additionally, the stations '4D16P Forrest Kerr Mid Elevation Snow', '4D17P Forrest Kerr High Elevation Snow' 
-    have data on the 00:00. These also appear not to have data on the 16:00. So, perhaps we can simply move those 
-    timestamps by the 16 hours to make them
-    '''
-    dfsub = df[['4D16P Forrest Kerr Mid Elevation Snow','4D17P Forrest Kerr High Elevation Snow']]
-    dfsub = dfsub.dropna(axis=0,how='all')
-    dfsub.index += Timedelta("16 hours")
-    
-    # Now simply merge the two data frames into a master data frame that only has the data we want.
-    df.loc[df.index.strftime('%H') == '22',~df.columns.isin(['4D16P Forrest Kerr Mid Elevation Snow','4D17P Forrest Kerr High Elevation Snow'])] = np.nan
-    df = df.loc[:,~df.columns.isin(['4D16P Forrest Kerr Mid Elevation Snow','4D17P Forrest Kerr High Elevation Snow'])].join(dfsub)
-    df = df.dropna(axis=0,how='all')
-    df = df.loc[:,df.columns.sort_values().unique()]
-
-    return df, stations_with_current_year
-
-#CPC switched its official ENSO index from the Oceanic Nino Index (ONI) to the Relative ONI (RONI)
-#on 1 February 2026. RONI is Nino 3.4 SST anomaly relative to the tropical mean SST anomaly, rescaled
-#to ONI's amplitude, so the usual +/-0.5 thresholds still apply. Columns are SEAS, YR, ANOM.
-RONI_URL = 'https://www.cpc.ncep.noaa.gov/data/indices/RONI.ascii.txt'
-
-#Import the relative oceanic Nino index and massage into a form that allows selection by ENSO strength
-def get_wyear_extrema_oni(url=RONI_URL):
-    '''
-    Returns (mnxonidata, latest): the per-water-year ENSO index extremum used to filter years,
-    and the most recent 3-month-season value, which is used to pick the slider's starting range.
-    '''
-    onidata = read_fwf(url)
-    latest = onidata['ANOM'].dropna().iloc[-1]
-    oniseaslist = list(['OND','NDJ','DJF','JFM','FMA','MAM'])
-    onidata = onidata[onidata['SEAS'].isin(oniseaslist)].copy()
-    #Need to add a year to the OND and NDJ seasoned years to correspond to the hydrological year that ENSO cycle belongs to.
-    onidata['YR'] = onidata['YR'].mask(onidata['SEAS'].isin(['OND','NDJ']),onidata['YR']+1)
+            rows[sid] = (obs_date, value, median, 100.0 * value / median, 'ok')
+    return pd.DataFrame.from_dict(
+        rows, orient='index', columns=['obs_date', 'swe_mm', 'median_mm', 'pct_of_median', 'anom_status'])
 
 
-    #Issue here is that the selector finds the years where the ONI range was met, but needs
-    #To identify the peak ONI values during the snow year.
-    mnxonidata = onidata.groupby(['YR']).min()
-    mnxonidata['MAX_ANOM'] = onidata.groupby(['YR']).max()['ANOM']
-    mnxonidata = mnxonidata.rename(columns={'ANOM':'MIN_ANOM'})
-    #Three cases:
-    #         1) where the min anom and the max anom are both negative, keep the min anom
-    #         2) where the max anom and the min anom are both positive, keep the max anom
-    #         3) where the min anom is negative and the max anom is positive, keep the largest
-    #                absolute value and it's sign.
-    minminmap = (mnxonidata['MIN_ANOM'] < 0) & (mnxonidata['MAX_ANOM'] <= 0)
-    maxmaxmap = (mnxonidata['MIN_ANOM'] >= 0) & (mnxonidata['MAX_ANOM'] > 0)
-    keepminmap = (mnxonidata['MIN_ANOM'] < 0) & (mnxonidata['MAX_ANOM'] > 0) & (np.abs(mnxonidata['MIN_ANOM']) >= np.abs(mnxonidata['MAX_ANOM']))
-    minmap = minminmap | keepminmap
-    keepmaxmap = (mnxonidata['MIN_ANOM'] < 0) & (mnxonidata['MAX_ANOM'] > 0) & (np.abs(mnxonidata['MAX_ANOM']) >= np.abs(mnxonidata['MIN_ANOM']))
-    maxmap = maxmaxmap | keepmaxmap
-    mnxonidata.loc[minmap,'ANOM'] = mnxonidata.loc[minmap,'MIN_ANOM']
-    mnxonidata.loc[maxmap,'ANOM'] = mnxonidata.loc[maxmap,'MAX_ANOM']
-    return mnxonidata, latest
+# ---------------------------------------------------------------- ENSO
 
-def get_oni_startrange(latest):
-    '''
-    Initial slider range from the most recent seasonal ENSO index value, using CPC's +/-0.5 thresholds.
-    Uses the latest season rather than the last completed water year so the app opens on the
-    ENSO state that is developing now.
-    '''
-    if latest >= 0.5:
-        return [0.5,3]
-    elif latest <= -0.5:
-        return [-3,-0.5]
-    else:
-        return [-0.5,0.5]
+def enso_by_water_year(enso):
+    """
+    One ENSO index value per water year, from seasonal values (DataFrame: season, year, value): among the
+    OND to MAM seasons, the value of largest magnitude, keeping its sign (ties go to the positive value).
+    The current water year uses whichever of its seasons have been published so far.
+    """
+    e = enso[enso['season'].isin(ENSO_SNOW_SEASONS)].copy()
+    e['water_year'] = e['year'] + e['season'].isin(['OND', 'NDJ']).astype(int)
+    by_year = e.groupby('water_year')['value']
+    low, high = by_year.min(), by_year.max()
+    result = high.where(high.abs() >= low.abs(), low)
+    result.name = 'enso'
+    return result
 
-#Now have to find when that peak occurred...!
-def count_coverage(series):
-    return (~series.isna()).sum()
 
-def get_median(series):
-    return(series.median())
-#Define a series of functions to be used to calculate the desired statistics on all stations
-#and all years of data. I'll probably write these individually outside of the functions first
-#and then when I am satisfied that they work okay, will place them inside the functions. Still
-#don't know how to effectively debug functions in python and especially not in Jupyter lab.
-def process_snow_maxima(df):
-    '''
-    Take the snow data frame as input and process for the timing and amplitude of peak snow for all stations
-    and for all years. Output will be a dataframe with index of years and columns of stations containing max
-    snow amount and a second data frame with the same organization but containing timing of max snow.
-    '''
-    pass
+def latest_enso(enso):
+    """The most recent seasonal value: (season, year, value)."""
+    order = {s: i for i, s in enumerate(ENSO_SEASON_ORDER)}
+    e = enso.assign(_order=enso['season'].map(order)).sort_values(['year', '_order'])
+    last = e.iloc[-1]
+    return last['season'], int(last['year']), float(last['value'])
 
-def process_snowoff_day(df):
-    '''
-    Take the snow data frame as input and process for the timing of the snowpack's demise. Output will be a
-    pandas dataframe with an index of years and columns per station with values of the hydrological day of year of
-    snowpack loss.
-    '''
-    pass
 
-def process_peak_snowmelt(df):
-    '''
-    Take the snow data frame as input and process for the amplitude and timing of the peak in snow melt rate.
-    This will be noisy and will amplify data errors as it involves the calculation of a differrence series
-    and finding the largest negative value of that series. Data jumps will be preferentially selcted for.
-    Output will be two data frames with index of years and columns for stations with values of hydrological
-    day of year of the peak melt rate and the value of that peak rate.
-    '''
-    pass
+def enso_start_range(latest_value):
+    """Initial slider range for the most recent ENSO value, using CPC's +/-0.5 thresholds."""
+    if latest_value >= 0.5:
+        return [0.5, 3]
+    if latest_value <= -0.5:
+        return [-3, -0.5]
+    return [-0.5, 0.5]

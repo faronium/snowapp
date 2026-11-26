@@ -1,185 +1,40 @@
 #!/usr/bin/env python
-# coding: utf-8
-
-# # Snow Data
-#
-# Tool to import archived snow data and manipulate it using python pandas. Eventually
-# to plot with plotlinkedinly/dash app of some kind.
-#
-
-
-
-import pandas as pd
-import numpy as np
-from dash import Dash, html, dcc, Input, Output, callback, State
-import plotly.graph_objects as go
-import dash_bootstrap_components as dbc
-from datetime import datetime
-import time
-from snowdata import get_wyear_extrema_oni, get_oni_startrange, load_munge_snow_data, count_coverage, get_median
-from documentation import how_to_md, analysis_desc_md, header_text_md, footer_text_md
-from snowmap import draw_station_map
-from snowplot import snow_lineplot
-
 '''
+ENSO Snow BC: a Dash app that plots water-year snow water equivalent at BC's automated snow pillow
+stations, with controls to filter seasons by ENSO state and a map of current snowpack relative to median.
+
 Author: Faron Anslow
 E-mail: faron.anslow@gmail.com
 
-This code generates a Dash web browser application that plots single station water-year snow evolution with
-controls to filter by station location and ENSO state. Default is to display the median and 1-sigma range
-for the entire record, the median and 1-sigma range for a selected ENSO condition and the current year's
-snowpack evolution.
+How the pieces fit together:
+  ingest.py     downloads the source data (below) into a SQLite database (snowdb.py)
+  datastore.py  keeps an in-memory snapshot of that database for the callbacks, and refreshes it in a
+                background thread every few hours
+  snowdata.py   the analysis: water years, medians and ranges, current anomalies, ENSO by water year
+  snowmap.py, snowplot.py   the two figures
+  documentation.py          the text on the Analysis and Help tabs
 
-Future iterations will include a map-view component that will display the station locations with symbology
-that illustrates the relationship between various snow statistics (such as timing of peak, amplitude of peak,
-timing of peak melt, amplitude of peak melt and timing of snow loss) and seasonal teleconnection/variability
-patterns.
-
-Sources for snow data and teleconnection index values.
-Snow data URL: https://www.env.gov.bc.ca/wsd/data_searches/snow/asws/data/
-RONI data URL: https://www.cpc.ncep.noaa.gov/data/indices/RONI.ascii.txt
-  (CPC switched its official ENSO index from ONI to the Relative ONI on 1 Feb 2026.)
-PNA data URL: https://www.cpc.ncep.noaa.gov/products/precip/CWlink/pna/norm.pna.monthly.b5001.current.ascii
-NAO data URL: https://www.cpc.ncep.noaa.gov/products/precip/CWlink/pna/norm.nao.monthly.b5001.current.ascii
-All teleconnections in one! ftp://ftp.cpc.ncep.noaa.gov/wd52dg/data/indices/tele_index.nh
+Data sources:
+  Snow data:        https://www.env.gov.bc.ca/wsd/data_searches/snow/asws/data/
+  Station metadata: BC Data Catalogue, WHSE_WATER_MANAGEMENT.SSL_SNOW_ASWS_STNS_SP
+  RONI:             https://www.cpc.ncep.noaa.gov/data/indices/RONI.ascii.txt
+                    (CPC switched its official ENSO index from ONI to the Relative ONI on 1 Feb 2026.)
 '''
+import logging
 
-df, stations_with_current_year = load_munge_snow_data()
+import dash_bootstrap_components as dbc
+from dash import Dash, Input, Output, State, dcc, html, no_update
 
-#lets figure out how to make quantiles for each station/day and 
-#compute the percentile amount relative to median for all stations.
-#The quantiles will need to be passed into the plotting function
-#To be shown.
+import datastore
+from documentation import analysis_desc_md, footer_text_md, how_to_md
+from snowmap import draw_station_map
+from snowplot import snow_lineplot
 
-#We only need the median outside of the line plotting function, 
-#so we can save the full quantile calculation for there. 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
 
-#Filter the location file by what's in the data file and vice versa so that there is 1:1
-#correspondence between the meta data file and the data file. Let's do this on the location ID
-#locdf
-datastnids = pd.Series([i.split(' ',1)[0] for i in df.columns.to_list()])
-datastnnames = pd.Series([i.split(' ',1)[1] for i in df.columns.to_list()])
+DEFAULT_STATION = '3A25P'   # Squamish River Upper
+MIN_SEASONS_FILTER = 20     # for the "require 20 complete seasons" option
 
-#Bring in the station meta data
-locdf = pd.read_csv('./snow/SNW_ASWS.csv')
-metastnids = locdf['LCTN_ID']
-datastnnames = datastnnames[datastnids.isin(metastnids)]
-datastnids = datastnids[datastnids.isin(metastnids)]
-metastnids = metastnids[metastnids.isin(datastnids)]
-
-#re-subset the dataframes so that the stations match one for one
-df = df.loc[:,(datastnids+' '+datastnnames)]
-locdf = locdf.loc[locdf['LCTN_ID'].isin(metastnids),:]
-#if ~(stations_with_current_year.isin(datastnids+' '+datastnnames).all()):
-#    raise
-
-locdf['text'] = locdf['LCTN_ID'] + ' ' + locdf['LCTN_NM'] + '<br>Elevation: ' + (locdf['ELEVATION']).astype(str)
-
-# Make a column formatted that gives the hydrological year. Essentially the time index, forward by 3 months,
-# then reformatted to %Y using strftime.
-def datetimepandas(timestamp,theformat):
-    return datetime.strftime(timestamp,theformat)
-def hydrodoy_from_timestamp(timestamps):
-    """
-    This function takes a pandas data Series object of timestamps and converts it into the day of the hydrological
-    year which starts on 1 October and runs through the end of September. Returns a pandas Series of those days of year.
-
-    Leap years are accommodated in an ugly way through making masks on the vector. I'm sure there are more elegant ways
-    of doing this!
-    """
-    #Calculating the julian day is the first, necessary step.
-    hydrodoy = timestamps.apply(datetimepandas,args=('%j',)).astype(int)
-    #Next, need to link logic to operate one way for years where YEAR % 4 == 0 and anotherway for years where YEAR % 4 ~= 0
-    leapmask = timestamps.apply(datetime.strftime,args=('%Y',)).astype(int) % 4 == 0
-    hydrodoy = hydrodoy - 273
-    hydrodoy.loc[leapmask] = hydrodoy.loc[leapmask] - 1 #Adjust for the leap year
-    negleapmask = leapmask & (hydrodoy < 1)
-    hydrodoy = hydrodoy.mask(hydrodoy < 1, hydrodoy+365) #Correct the days of the year prior to 1 October back to their order
-    hydrodoy.loc[negleapmask] = hydrodoy.loc[negleapmask] + 1 #Adjust for the leap year
-    return hydrodoy
-
-def wateryear_from_timestamps(timestamps):
-    """
-    This function takes a pandas data Series object of timestamps and determines the hydrological year the date
-    belongs to. Essentially, has to look at the year 92 days in the future.
-
-    Needs error trapping or at least some type checking.
-    """
-    wateryears = timestamps + pd.Timedelta("92 day")
-    wateryears = wateryears.apply(datetimepandas,args=('%Y',))
-    wateryears = wateryears.astype(int)
-    return wateryears
-
-# ## Station Snow Statistics
-#
-# Interested in being able to correlate ENSO with timing of peak snow and amount of snow at the peak. Also interested in magnitude of peak melt rate and timing of the peak melt rate. These satistics will be part of a map-based view of the station data that will be colourized by the level of correlation or by the percent of peak snow associated with the
-df['hydrodoy'] = hydrodoy_from_timestamp(df.index.to_series())
-df['hydrological_year'] = wateryear_from_timestamps(df.index.to_series())
-
-#Add on the month-day column for better plotting
-df['month-day'] = df.index.strftime('%m-%d')
-#Drop all leap years
-df = df.loc[(~(df['month-day']=='02-29')),:]
-
-#pd.set_option('display.max_rows', 150)
-#Find the number of years with more than 80% data coverage.
-nyears_complete = (df.groupby(by="hydrological_year").apply(count_coverage,include_groups=False)*100/365 > 80).sum(axis='rows')
-nyears_complete = nyears_complete[:-2]
-#Get the peak snow each year:
-peak_annual_snow = df.iloc[:,:-1].groupby(by="hydrological_year").max()
-peak_annual_snow = peak_annual_snow.iloc[:,:-1]
-historical_median_snow = df.iloc[:,:-2].groupby(by="hydrodoy").mean()
-
-#peak_annual_snow
-dftest = df.copy()
-#keep the index
-dates = df.index
-dftest = dftest.set_index(['hydrodoy'],append=True).iloc[:,:-2]
-historical_median_snow = dftest.rolling(window=5,center=True).mean().groupby(level=1).mean()
-
-#dftest = dftest.iloc[:,:-3]
-dftest.sort_index(level=['hydrodoy'])
-#pd.set_option('display.max_rows', None)
-#dftest.loc[(slice(None),1),:]
-pd.set_option('display.max_rows', 30)
-
-# Current anomaly for each station, taken from that station's most recent valid observation
-# in the last few days. Using only the newest row of the table was fragile: that row is often
-# only partly filled (BC posts the 16:00 UTC row before most stations have reported, and the
-# Forrest Kerr stations' 00:00 UTC readings get shifted into it), which left most stations
-# with no anomaly and the map showing "0% of normal" everywhere.
-RECENT_DAYS = 3
-obsdates = dftest.index.get_level_values(0)
-recent_obs = dftest.loc[obsdates > obsdates.max() - pd.Timedelta(days=RECENT_DAYS)]
-current_anom = {}
-for stn in recent_obs.columns:
-    valid = recent_obs[stn].dropna()
-    if valid.empty:
-        current_anom[stn] = (np.nan, 'no reading in the last {} days'.format(RECENT_DAYS))
-        continue
-    (obsdate, obshdoy), swe = valid.index[-1], valid.iloc[-1]
-    normal = historical_median_snow.at[obshdoy, stn]
-    if pd.isna(normal):
-        current_anom[stn] = (np.nan, 'no normal available')
-    elif normal == 0:
-        current_anom[stn] = (np.nan, 'no snow; normally none on this date') if swe == 0 else \
-                            (400., 'snow present; normally none on this date')
-    else:
-        pct = 100*swe/normal
-        current_anom[stn] = (min(pct, 400.), '{:.0f}% of normal ({})'.format(pct, obsdate.strftime('%d %b')))
-current_anom = pd.DataFrame.from_dict(current_anom, orient='index', columns=['pct_snow', 'pct_text'])
-
-# Attach to the station metadata by station name rather than relying on matching row order.
-stnkey = locdf['LCTN_ID'] + ' ' + locdf['LCTN_NM']
-locdf['pct_snow'] = stnkey.map(current_anom['pct_snow'])
-locdf['pct_text'] = stnkey.map(current_anom['pct_text']).fillna('no data')
-
-mnxonidata, latest_enso = get_wyear_extrema_oni()
-startrange = get_oni_startrange(latest_enso)
-
-
-external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
-currentyear = df[['hydrological_year']].max()
 fillninoarea = 'rgba(255,110,95,0.3)'
 fillninoline = 'rgb(255,110,95)'
 fillninaarea = 'rgba(0,175,245,0.3)'
@@ -198,40 +53,56 @@ COLORS = {
     'bg': '#F2F4F8',           # Light background
     'text': '#292F36',         # Text color
 }
+CARD_HEADER_STYLE = {'background-color': COLORS['secondary'], 'color': 'white', 'font-weight': 'bold'}
 
 snowapp = Dash(
     __name__,
-    external_stylesheets = [dbc.themes.SANDSTONE],
+    external_stylesheets=[dbc.themes.SANDSTONE],
     meta_tags=[{'name': 'viewport', 'content': 'width=device-width, initial-scale=1'}],
-    title = 'ENSO Snow BC: exploring snow accumulation and El Nino/La Nina in British Columbia',
+    title='ENSO Snow BC: exploring snow accumulation and El Nino/La Nina in British Columbia',
+    # The layout is built per page load and may be the "loading" page, which lacks the main components.
+    suppress_callback_exceptions=True,
 )
-
 server = snowapp.server
+
+# Start loading/refreshing data as soon as the app is imported, and make sure the refresh thread is
+# still alive on every request.
+datastore.ensure_running()
+server.before_request(datastore.ensure_running)
+
+
+@server.route('/healthz')
+def healthz():
+    '''Health check for the hosting platform. Returns 200 while the first data load is still running.'''
+    snap = datastore.current()
+    return {
+        'status': 'ok' if snap else 'loading',
+        'data_version': snap.version if snap else None,
+        'data_through': snap.data_through.strftime('%Y-%m-%d') if snap else None,
+    }
 
 
 modal_header_image_path = 'assets/20250322_135400_small.jpg'
 
-
 modal = dbc.Modal(
     [
-        #dbc.ModalHeader(),
         dbc.ModalBody(
             [
-                #Call the function to produce the documentation using dcc.markdown
                 dbc.Row([
                     dbc.Col([
-                        html.H3("Multi-year Snow Water Equivalent Stratified by ENSO Strength", 
-                                className="text-center my-4", 
+                        html.H3("Multi-year Snow Water Equivalent Stratified by ENSO Strength",
+                                className="text-center my-4",
                                 style={'color': COLORS['dark'], 'font-weight': 'bold'}),
-                        html.Div([html.Img(src=modal_header_image_path,className="mb-4", style={'height': '20%', 'width': '20%'})],style={'textAlign': 'center'} ),
-                        html.P('''This app allows exploration of the strong relationship between the El Niño Southern Oscillation (ENSO) and 
-                            snow accumulation in British Columbia. ENSO is correlated with temperature and precipitation in winter and 
+                        html.Div([html.Img(src=modal_header_image_path, className="mb-4",
+                                           style={'height': '20%', 'width': '20%'})],
+                                 style={'textAlign': 'center'}),
+                        html.P('''This app allows exploration of the strong relationship between the El Niño Southern Oscillation (ENSO) and
+                            snow accumulation in British Columbia. ENSO is correlated with temperature and precipitation in winter and
                             spring. This relationship partially explains the variability
                             in the province's snowpack from year to year.'''),
                         footer_text_md(dcc),
                     ], width=12)
                 ]),
-                #header_text_md(dcc),
             ]
         ),
         dbc.ModalFooter(
@@ -241,22 +112,14 @@ modal = dbc.Modal(
     id="pageload-modal",
     is_open=True,
     size="xl",
-
 )
-
-
 
 reclengthselect = html.Div(
     [
-        #Want to implement a checklist here that allows for the selection of one or more of three
-        #things
-        #
-        #1) Want to allow restriction to long records only
-        #2) Want to allow restriction to records with current year only
         dcc.Checklist(
             options=[
                 {'label': 'Active stations only?', 'value': 'rcy'},
-                {'label': 'require 20 years of record?', 'value': 'rtmy'},
+                {'label': f'require {MIN_SEASONS_FILTER} complete seasons?', 'value': 'rtmy'},
             ],
             value=['rcy', 'rtmy'],
             id='record-length-current-check',
@@ -264,10 +127,8 @@ reclengthselect = html.Div(
     ],
 )
 
-
 anomselect = html.Div(
     [
-        #Want to implement a check whether to show the maps with anomalies or not.
         dcc.Checklist(
             options=[
                 {'label': 'Plot station anomalies?', 'value': 'anomstat'},
@@ -278,44 +139,46 @@ anomselect = html.Div(
     ],
 )
 
-slider = html.Div(
-    [
-        html.P("Filter by La Niña/El Niño Strength:"),
-        dcc.RangeSlider(
-            min=-3,
-            max=3,
-            step=0.1,
-           marks={
-                -2.7: {'label': 'Extreme La Niña', 'style': {'color': fillninaline, "fontSize": "14px"}},
-                -1.3: {'label': 'Mod. La Niña', 'style': {'color': fillninaline, "fontSize": "14px"}},
-                -0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)', "fontSize": "14px"}},
-                0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)', "fontSize": "14px"}},
-                1.3: {'label': 'Mod. El Niño', 'style': {'color': fillninoline, "fontSize": "14px"}},
-                2.7: {'label': 'Extreme El Niño', 'style': {'color': fillninoline, "fontSize": "14px"}}
-            },
-            value=[startrange[0], startrange[1]],
-            updatemode='drag',
-            id='oni-range-slider',
-            className='mb-4',
-        ),
-    ],
-)
 
-snowmap = html.Div(
-    [
-        dcc.Graph(
-            id="snow-station-map",
-            #This is the initil point to draw data for. Clunky way of assigning it...
-            clickData={'points': [{'text': '3A25P Squamish River Upper<br>Elevation: 1360.0'}]},
-            #Get rid of the selection buttons in the map because they will confuse with
-            #The select on click action that's desired.
-            config={
-                'modeBarButtonsToRemove': ['pan2d', 'lasso2d', 'select2d']
-            },
-            style={'height': "70vh"},
-        ),
-    ],
-)
+def make_slider(start_range):
+    return html.Div(
+        [
+            html.P("Filter by La Niña/El Niño Strength:"),
+            dcc.RangeSlider(
+                min=-3,
+                max=3,
+                step=0.1,
+                marks={
+                    -2.7: {'label': 'Extreme La Niña', 'style': {'color': fillninaline, "fontSize": "14px"}},
+                    -1.3: {'label': 'Mod. La Niña', 'style': {'color': fillninaline, "fontSize": "14px"}},
+                    -0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)', "fontSize": "14px"}},
+                    0.50: {'label': 'Neutral', 'style': {'color': 'rgb(80,80,80)', "fontSize": "14px"}},
+                    1.3: {'label': 'Mod. El Niño', 'style': {'color': fillninoline, "fontSize": "14px"}},
+                    2.7: {'label': 'Extreme El Niño', 'style': {'color': fillninoline, "fontSize": "14px"}}
+                },
+                value=list(start_range),
+                updatemode='drag',
+                id='oni-range-slider',
+                className='mb-4',
+            ),
+        ],
+    )
+
+
+def make_station_map_graph(default_station):
+    return html.Div(
+        [
+            dcc.Graph(
+                id="snow-station-map",
+                # The station plotted when the page opens, in the same form a click on the map produces.
+                clickData={'points': [{'customdata': [default_station]}]},
+                # Remove the selection tools, which would be confused with selecting a station by clicking.
+                config={'modeBarButtonsToRemove': ['pan2d', 'lasso2d', 'select2d']},
+                style={'height': "70vh"},
+            ),
+        ],
+    )
+
 
 snowgraph = html.Div(
     [
@@ -330,87 +193,91 @@ snowgraph = html.Div(
     ],
 )
 
-snowapp.layout = dbc.Container(
-    children=[
-    modal,
-    dbc.Tabs(
-        children=[
-            dbc.Tab([
-                dbc.Row([
-                    dbc.Col([
-                        dbc.Card([
-                            dbc.CardHeader("Snow Pillow Location Map", 
-                               style={'background-color': COLORS['secondary'], 
-                                      'color': 'white', 
-                                      'font-weight': 'bold'}),
-                            dbc.CardBody([
-                                snowmap,
-                            ]),
-                        ],
-                        className="shadow",
-                        )
-                    ],
-                    width=12, lg=4, className="mb-4",
-                    ),
-                    dbc.Col([
-                        dbc.Card([
-                            dbc.CardHeader("Water-year Snow Water Equivalent", 
-                               style={'background-color': COLORS['secondary'], 
-                                      'color': 'white', 
-                                      'font-weight': 'bold'}),
-                            dbc.CardBody([
-                                snowgraph
-                            ]),
-                        ],
-                        className="shadow",
-                        )
-                    ],
-                    width=12, lg=8, className="mb-4",
-                   )
-                ]
-                ),
-                dbc.Row([
-                    dbc.Col([
-                        dbc.Card([
-                            dbc.CardHeader(
-                                "Data Selection Controls", 
-                                style={
-                                    'background-color': COLORS['secondary'], 
-                                    'color': 'white', 
-                                    'font-weight': 'bold'
-                                }
-                            ),
-                            dbc.CardBody([
-                                dbc.Row([
-                                    dbc.Col([reclengthselect,], width=2),
-                                    dbc.Col([anomselect,], width=2),
-                                    dbc.Col([slider,], width=8),
-                                ])
-                            ]),
-                        ])
-                    ], width = 12, className="mt-4",),
-                ]),
-            ],
-            label='ENSO Snow BC',
-            ),
-            dbc.Tab(
-                label='Analysis',
-                children=[
-                    analysis_desc_md(dcc),
-                ]
-            ),
-            dbc.Tab(
-                label='Help',
-                children=[
-                    how_to_md(dcc),
-                ]
-            )
-        ]
-    ),
-    footer_text_md(dcc),
-], id='page-content', fluid=True, style={'background-color': COLORS['bg'], "padding": "20px",})    
 
-# Callback to close the modal
+def loading_layout():
+    '''Shown until the first data load finishes (about a minute after a restart on a fresh database).'''
+    return dbc.Container([
+        html.H3('Loading the latest snow data…', className='mt-5'),
+        html.P('This takes about a minute after the app restarts. The page will reload by itself.'),
+        dcc.Interval(id='loading-poll', interval=5000),
+        dcc.Store(id='loading-ready'),
+    ], style={'padding': '20px'})
+
+
+def serve_layout():
+    '''Built on every page load, so the slider default and data status reflect the latest data.'''
+    snap = datastore.current()
+    if snap is None:
+        return loading_layout()
+    default_station = DEFAULT_STATION if DEFAULT_STATION in snap.stations.index else snap.stations.index[0]
+    return dbc.Container(
+        children=[
+            modal,
+            dbc.Tabs(
+                children=[
+                    dbc.Tab([
+                        dbc.Row([
+                            dbc.Col([
+                                dbc.Card([
+                                    dbc.CardHeader("Snow Pillow Location Map", style=CARD_HEADER_STYLE),
+                                    dbc.CardBody([make_station_map_graph(default_station)]),
+                                ], className="shadow")
+                            ], width=12, lg=4, className="mb-4"),
+                            dbc.Col([
+                                dbc.Card([
+                                    dbc.CardHeader("Water-year Snow Water Equivalent", style=CARD_HEADER_STYLE),
+                                    dbc.CardBody([snowgraph]),
+                                ], className="shadow")
+                            ], width=12, lg=8, className="mb-4"),
+                        ]),
+                        dbc.Row([
+                            dbc.Col([
+                                dbc.Card([
+                                    dbc.CardHeader("Data Selection Controls", style=CARD_HEADER_STYLE),
+                                    dbc.CardBody([
+                                        dbc.Row([
+                                            dbc.Col([reclengthselect], width=2),
+                                            dbc.Col([anomselect], width=2),
+                                            dbc.Col([make_slider(snap.start_range)], width=8),
+                                        ]),
+                                    ]),
+                                    dbc.CardFooter(datastore.status_text(snap), className='small text-muted'),
+                                ])
+                            ], width=12, className="mt-4"),
+                        ]),
+                    ], label='ENSO Snow BC'),
+                    dbc.Tab(label='Analysis', children=[analysis_desc_md(dcc)]),
+                    dbc.Tab(label='Help', children=[how_to_md(dcc)]),
+                ]
+            ),
+            footer_text_md(dcc),
+        ],
+        id='page-content', fluid=True, style={'background-color': COLORS['bg'], "padding": "20px"},
+    )
+
+
+snowapp.layout = serve_layout
+
+
+# ---------------------------------------------------------------- loading page: reload once data is ready
+
+@snowapp.callback(Output('loading-ready', 'data'), Input('loading-poll', 'n_intervals'))
+def check_loaded(_):
+    return datastore.current() is not None
+
+
+snowapp.clientside_callback(
+    '''function(ready) {
+        if (ready) { window.location.reload(); }
+        return window.dash_clientside.no_update;
+    }''',
+    Output('loading-poll', 'disabled'),
+    Input('loading-ready', 'data'),
+)
+
+
+# ---------------------------------------------------------------- main page
+
 @snowapp.callback(
     Output("pageload-modal", "is_open"),
     Input("close-modal", "n_clicks"),
@@ -422,83 +289,70 @@ def toggle_modal(n_clicks, is_open):
     return is_open
 
 
-
 @snowapp.callback(
     Output('snow-station-map', 'figure'),
-    Input('record-length-current-check','value'),
-    Input('show-anoms-stat','value'),
+    Input('record-length-current-check', 'value'),
+    Input('show-anoms-stat', 'value'),
 )
-def make_station_map(reccheck,anomstat):
+def make_station_map(reccheck, anomstat):
     '''
-    Work with the record length checklist to filter the location data according to
-    what is available in the master dataframe. The argument reccheck is the list
-    of strings created as output by the checklist that indicates the logical
-    filters. If present, then true, if absent, no filter.
+    Draw the station map, filtered by the checklist: 'rcy' keeps stations with data in the current
+    water year, 'rtmy' keeps stations with at least MIN_SEASONS_FILTER complete seasons.
     '''
-    if len(anomstat) == 0:
-        #Plot single color symbols on the station map
-        anomstat=False
-    else:
-        #Plot colors according to the current daily station anomaly
-        anomstat=True
-    locdfuse = locdf
-    if ('rcy' in reccheck):
-        #Only keep stations with current year's data
-        locdfuse = locdfuse.loc[(locdfuse['LCTN_ID'] + ' ' + locdfuse['LCTN_NM']).isin(pd.Series(stations_with_current_year)),:]
-    if ('rtmy' in reccheck):
-        #Only keep stations that have 30 or more years of complete records.
-        locdfuse = locdfuse.loc[(locdfuse['LCTN_ID'] + ' ' + locdfuse['LCTN_NM']).isin(pd.Series(nyears_complete.index[nyears_complete >= 20])),:]
+    snap = datastore.current()
+    if snap is None:
+        return no_update
+    stations = snap.stations
+    if 'rcy' in reccheck:
+        stations = stations[stations['active']]
+    if 'rtmy' in reccheck:
+        stations = stations[stations['n_seasons'] >= MIN_SEASONS_FILTER]
+    return draw_station_map(stations, show_anomaly=bool(anomstat))
 
-    return draw_station_map(go,locdfuse,anomstat)
 
-#Now make a callback that uses the values from the drop down and the slider selection to stratify the
-#data and make the plot
+def station_from_click(click_data, snap):
+    '''The station_id of the clicked marker (customdata[0]), falling back to the default station.'''
+    try:
+        sid = click_data['points'][0]['customdata'][0]
+    except (TypeError, KeyError, IndexError):
+        sid = None
+    if sid not in snap.matrices:
+        sid = DEFAULT_STATION if DEFAULT_STATION in snap.matrices else next(iter(snap.matrices))
+    return sid
+
 
 @snowapp.callback(
     Output('snow-station-graph', 'figure'),
     Input('oni-range-slider', 'value'),
     Input('snow-station-map', 'clickData'),
 )
-def update_line_chart(onirange,clickData):
+def update_line_chart(onirange, clickData):
     '''
-    Function to take the output from the slider and the station map callbacks
-    and filter the master dataframe and the years according to the ONI magnitude
-    Then calls a subfunction to create the actual map.
+    Plot the selected station's water years, with the median and range of the full record and of the
+    seasons whose ENSO (RONI) value falls in the slider's range.
     '''
-    stnname = clickData['points'][0]['text'].split('<br>')[0]
-    subdf = pd.pivot_table(
-                df[[stnname,'hydrological_year','month-day']],
-                index=['month-day'],
-                columns="hydrological_year",
-                values=stnname
-            )
-    #The pivot re-orders the intex. 
-    #need to stack the bottom onto the top to make a hydrological year
-    subdf = pd.concat([subdf.iloc[-92:,:],subdf.iloc[0:(366-92):,]],axis=0)
-    yearsuse = mnxonidata.index[(mnxonidata["ANOM"] >= onirange[0]) &
-        (mnxonidata["ANOM"] <= onirange[1])].unique()
-    if ((onirange[0] + onirange[1])/2 > 0):
-        fillarea = fillninoarea
-        fillline = fillninoline
+    snap = datastore.current()
+    if snap is None:
+        return no_update
+    sid = station_from_click(clickData, snap)
+    lo, hi = onirange
+    selected_years = snap.enso.index[(snap.enso >= lo) & (snap.enso <= hi)]
+    if (lo + hi) / 2 > 0:
+        fillarea, fillline = fillninoarea, fillninoline
     else:
-        fillarea = fillninaarea
-        fillline = fillninaline
-
-    plottitle="Hydrologic Year SWE for {}, Relative Oceanic Niño Index (RONI) {} to {}".format(stnname,onirange[0],onirange[1])
+        fillarea, fillline = fillninaarea, fillninaline
+    name = snap.stations['name'].get(sid, '')
+    plottitle = f"Hydrologic Year SWE for {sid} {name}, Relative Oceanic Niño Index (RONI) {lo} to {hi}"
     return snow_lineplot(
-        go,
-        pd,
-        subdf,
-        yearsuse,
-        currentyear,
+        snap.matrices[sid],
+        snap.complete[sid],
+        selected_years,
+        snap.current_wy,
         fillarea,
         fillline,
-        plottitle=plottitle
+        plottitle=plottitle,
     )
+
 
 if __name__ == '__main__':
     snowapp.run(debug=False)
-
-
-
-
