@@ -1,10 +1,24 @@
+# Python virtual environments
+env/
+.venv/
 bin/
 etc/
 lib/
 lib64
 pyvenv.cfg
 share/
+
+# Python caches
 __pycache__/
+.pytest_cache/
 .ipynb_checkpoints/
+
+# Local database (rebuilt from the sources by ingest.py)
+data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite.lock
+
 requirements.txt.backup
 requirements_080425.txt

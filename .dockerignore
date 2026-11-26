@@ -1,0 +1,10 @@
+# Keeps local-only files out of the Railway (Railpack) build if the app is deployed from a local folder
+# with `railway up`. Deploys from GitHub only see committed files anyway.
+env/
+.venv/
+data/
+*.sqlite
+*.sqlite-*
+**/__pycache__/
+.pytest_cache/
+.ipynb_checkpoints/
