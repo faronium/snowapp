@@ -201,6 +201,13 @@ snowgraph = html.Div(
 )
 
 
+ADJUST_LABEL = ' Remove the ENSO (RONI) signal before testing trends'
+
+
+def adjust_options(disabled):
+    return [{'label': ADJUST_LABEL, 'value': 'adjust', 'disabled': disabled}]
+
+
 def make_trends_tab(snap, default_station):
     '''The Trends tab: snow season indicators for one station, by water year or against RONI.'''
     options = [{'label': f"{sid} {row['name']} ({row['n_seasons']} complete seasons)", 'value': sid}
@@ -233,7 +240,7 @@ def make_trends_tab(snap, default_station):
                         ),
                         dcc.Checklist(
                             id='trend-adjust',
-                            options=[{'label': ' Remove the ENSO (RONI) signal before testing trends', 'value': 'adjust'}],
+                            options=adjust_options(disabled=False),
                             value=[],
                             className='mt-3',
                         ),
@@ -437,6 +444,17 @@ def follow_map_click(clickData):
         return no_update
     sid = station_from_click(clickData, snap)
     return sid if sid in snap.stations.index else no_update
+
+
+@snowapp.callback(
+    Output('trend-adjust', 'options'),
+    Output('trend-adjust', 'style'),
+    Input('trend-view', 'value'),
+)
+def toggle_adjust(view):
+    '''Removing the ENSO signal only applies to trends, so grey it out in the "vs RONI" view.'''
+    disabled = view == 'enso'
+    return adjust_options(disabled), ({'opacity': 0.45} if disabled else {})
 
 
 @snowapp.callback(

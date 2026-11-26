@@ -222,7 +222,8 @@ def how_to_md(dcc):
         pick that station alone or combine it with the other stations in its sub-basin, its region, or all of
         BC. *Indicators by water year* shows each indicator over time with its trend; *Indicators vs RONI*
         shows each one against the strength of El Niño or La Niña that year. Ticking *Remove the ENSO (RONI)
-        signal before testing trends* tests for a trend in what is left after the ENSO influence is taken out.
+        signal before testing trends* tests for a trend in what is left after the ENSO influence is taken out
+        (it applies to *Indicators by water year*, and is greyed out for *Indicators vs RONI*).
         The definitions and statistics are described on the Analysis tab.
 
         ###### The Graph
