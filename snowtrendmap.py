@@ -177,21 +177,20 @@ def significant_stations(stats, fdr=False):
     return pd.Series(np.nan_to_num(p, nan=1.0) < SIGNIFICANT, index=stats.index)
 
 
-def draw_trend_map(stations, stats, col, stat, selected, view, uirevision, fdr=False):
+def draw_trend_map(stations, stats, col, stat, selected, members, view, uirevision, fdr=False):
     """
     stations: DataFrame (index station_id) with name, latitude, longitude; stats: station_stats() for them;
-    selected: station ids of the current selection (one station or a group), or None for no highlight;
-    view: view_for().
+    selected: the station chosen on the tab (green halo); members: the stations of the selected group (the
+    rest are lightened), or None for all of BC; view: view_for().
     Clicking a station reports its id as customdata[0].
     """
     stats = stats.reindex(stations.index)
     sig = significant_stations(stats, fdr)
     has_value = stats['value'].notna()
-    highlight = selected is not None                     # None: no selection to highlight (all of BC)
-    selected = stations.index.isin(selected) if highlight else np.ones(len(stations), dtype=bool)
+    in_group = stations.index.isin(members) if members is not None else np.ones(len(stations), dtype=bool)
     colors = value_colors(stats['value'], col, stat)
     base = np.where(has_value, np.where(sig, 1.0, 0.55), 0.8)
-    opacity = np.where(selected, base, base * 0.6)
+    opacity = np.where(in_group, base, base * 0.6)
     size = np.where(has_value, 15, 8)
     hover = [_hover(r['name'], sid, stats.loc[sid], col, stat, bool(sig[sid])) for sid, r in stations.iterrows()]
     custom = list(zip(stations.index, hover))
@@ -206,9 +205,8 @@ def draw_trend_map(stations, stats, col, stat, selected, view, uirevision, fdr=F
                 customdata=[c for c, m in zip(custom, mask) if m],
             ))
 
-    if highlight:
-        halo(np.asarray(selected), 27, SELECT_COLOR)                  # selection, outermost
-    halo(np.asarray(sig & has_value), 20, RING_COLOR)                 # significance ring
+    halo(np.asarray(stations.index == selected), 23, SELECT_COLOR)      # the selected station, outermost
+    halo(np.asarray(sig & has_value), 19, RING_COLOR)                   # significance ring
     fig.add_trace(go.Scattermap(
         lon=stations['longitude'], lat=stations['latitude'], mode='markers',
         marker=dict(size=list(size), color=colors, opacity=list(opacity)),
@@ -228,4 +226,4 @@ def draw_trend_map(stations, stats, col, stat, selected, view, uirevision, fdr=F
 def key_note(fdr):
     test = 'false discovery rate controlled at 10%, Benjamini-Hochberg' if fdr else 'p < 0.05'
     return (f'Dark ring: significant ({test}). Faded: not significant. Small grey: fewer than '
-            f'{si.MIN_TREND_SEASONS} seasons in the period. Green halo: the current selection.')
+            f'{si.MIN_TREND_SEASONS} seasons in the period. Green halo: the selected station.')

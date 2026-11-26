@@ -122,8 +122,8 @@ def analysis_desc_md(dcc):
         stations are correlated with each other (this keeps the chance of a falsely significant map near 5%).
 
         The map zooms to the selection: about 100 km around a single station, the stations of a sub-basin or
-        region with some margin around them, or the whole province for *All of BC*. The selection has a green
-        halo and the other stations are lightened. Clicking a station on either map selects it on the Trends
+        region with some margin around them, or the whole province for *All of BC*. The station chosen on the
+        tab has a green halo, and stations outside the selected sub-basin or region are lightened. Clicking a station on either map selects it on the Trends
         tab; with a sub-basin or region showing, that switches to the clicked station's group.
 
         #### Grouped Stations (Trends tab)

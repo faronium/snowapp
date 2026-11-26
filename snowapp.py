@@ -319,7 +319,9 @@ def serve_layout():
     return dbc.Container(
         children=[
             modal,
+            dcc.Store(id='resize-trigger'),
             dbc.Tabs(
+                id='tabs',
                 children=[
                     dbc.Tab([
                         dbc.Row([
@@ -380,6 +382,25 @@ snowapp.clientside_callback(
     }''',
     Output('loading-poll', 'disabled'),
     Input('loading-ready', 'data'),
+)
+
+
+# Graphs first drawn while hidden (in a tab that isn't showing, or behind the intro dialog) keep plotly's default
+# size of 700 x 450. Resize every visible graph when a tab is opened or the dialog closes, so maps and plots fill
+# their panels (and the colour keys, which are sized to the panel, stay on the map).
+snowapp.clientside_callback(
+    '''function(tab, dialogOpen) {
+        setTimeout(function() {
+            if (!window.Plotly) { return; }
+            document.querySelectorAll('.js-plotly-plot').forEach(function(gd) {
+                if (gd.offsetParent !== null) { window.Plotly.Plots.resize(gd); }
+            });
+        }, 100);
+        return window.dash_clientside.no_update;
+    }''',
+    Output('resize-trigger', 'data'),
+    Input('tabs', 'active_tab'),
+    Input('pageload-modal', 'is_open'),
 )
 
 
@@ -508,14 +529,14 @@ def update_trend_map(sid, level, view, period, adjust, col, fdr):
     stats = snowtrendmap.station_stats(snap.indicators, stations.index, col, snap.enso, start, stat,
                                        adjust_enso=bool(adjust) and stat == 'trend')
     if level == 'bc':
-        selected, in_view, revision = None, stations, 'bc'
+        members, in_view, revision = None, stations, 'bc'
     else:
-        selected = snowgroups.group_members(list(stations.index), sid, level)
-        in_view = stations.loc[selected]
+        members = snowgroups.group_members(list(stations.index), sid, level)
+        in_view = stations.loc[members]
         # Keep a hand-set zoom while the selection stays the same (e.g. changing the indicator), re-centre otherwise.
         revision = sid if level == 'station' else f'{level}:{snowgroups.group_key(sid, level)}'
     view = snowtrendmap.view_for(in_view['latitude'], in_view['longitude'], level)
-    fig = snowtrendmap.draw_trend_map(stations, stats, col, stat, selected, view, revision, fdr=bool(fdr))
+    fig = snowtrendmap.draw_trend_map(stations, stats, col, stat, sid, members, view, revision, fdr=bool(fdr))
     return fig, snowtrendmap.key(col, stat), snowtrendmap.key_note(bool(fdr))
 
 

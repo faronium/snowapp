@@ -65,12 +65,14 @@ def test_station_stats_in_percent_per_decade():
     assert np.isnan(stats.loc['S2', 'value']) and stats.loc['S2', 'n'] == 0
 
 
-def test_draw_trend_map_highlights_only_a_selection():
-    stations = pd.DataFrame({'name': ['A', 'B'], 'latitude': [50.0, 51.0], 'longitude': [-123.0, -124.0]}, index=['S1', 'S2'])
-    stats = pd.DataFrame({'value': [-5.0, np.nan], 'p': [0.01, np.nan], 'n': [20, 4]}, index=['S1', 'S2'])
-    view = tm.view_for([50.0], [-123.0], 'station')
-    fig = tm.draw_trend_map(stations, stats, 'snow_off_day', 'trend', ['S1'], view, 'S1')
-    assert len(fig.data) == 3                     # selection halo, significance ring, stations
-    assert fig.layout.uirevision == 'S1' and fig.layout.map.zoom == pytest.approx(view['zoom'])
-    fig = tm.draw_trend_map(stations, stats, 'snow_off_day', 'trend', None, tm.BC_VIEW, 'bc')
-    assert len(fig.data) == 2                     # no halo for all of BC
+def test_draw_trend_map_halos_only_the_selected_station():
+    stations = pd.DataFrame({'name': ['A', 'B', 'C'], 'latitude': [50.0, 51.0, 52.0], 'longitude': [-123.0, -124.0, -125.0]},
+                            index=['S1', 'S2', 'S3'])
+    stats = pd.DataFrame({'value': [-5.0, 2.0, np.nan], 'p': [0.01, 0.5, np.nan], 'n': [20, 20, 4]}, index=stations.index)
+    view = tm.view_for([50.0, 51.0], [-123.0, -124.0], 'region')
+    fig = tm.draw_trend_map(stations, stats, 'snow_off_day', 'trend', 'S2', ['S1', 'S2'], view, 'region:x')
+    halo, ring, main = fig.data
+    assert list(halo.customdata[0])[0] == 'S2' and len(halo.customdata) == 1      # only the chosen station
+    assert [c[0] for c in ring.customdata] == ['S1']                               # only the significant one
+    assert list(main.marker.opacity)[2] < list(main.marker.opacity)[1]           # outside the group: lighter
+    assert fig.layout.uirevision == 'region:x' and fig.layout.map.zoom == pytest.approx(view['zoom'])
