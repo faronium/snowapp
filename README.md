@@ -1,102 +1,107 @@
-## Multi-year Snow Water Equivalent Stratified by ENSO Strength
+## ENSO Snow BC
 
-#### Introduction
-There is a strong relationship between BC's weather in winter and spring and the state 
-of the El Niño Southern Oscillation (ENSO) and this relationship translates to variability
-in the province's snowpack from year to year. This app allows the exploration of that 
-relationship between snow accumulation and ENSO in the province of British Columbia. 
+A [Dash](https://dash.plotly.com/) web app, live at [www.ensosnowbc.ca](https://www.ensosnowbc.ca), for exploring the
+relationship between the El Niño Southern Oscillation (ENSO) and snow accumulation in British Columbia. It shows
+water-year snow water equivalent (SWE) at BC's automated snow pillow stations. The seasons can be filtered by ENSO
+strength (CPC's Relative Oceanic Niño Index, RONI), and a map colours each station by its current SWE as a
+percentage of its median for the date.
 
-#### Data sources
-Snow water equivalent stations are maintained and operated by the [BC Ministry of Environment 
-and Climate Change Strategy]
-(https://www2.gov.bc.ca/gov/content/environment/air-land-water/water/water-science-data/water-data-tools/snow-survey-data) 
-and its partners [BC Hydro](https://bchydro.com), [Rio Tinto](https://www.riotinto.com), and 
-[Metro Vancouver](https://metrovancouver.org/). Data are collected using instruments called
-snow pillows which weigh the overlying snow and that weight is converted to the water 
-equivalent content of the snowpack. Data are daily and comprise a daily archive
-through the previous water year (2023 at the time of this app's creation) and the continuously 
-updated daily data for the most recent water year. The current-year snow data may have
-quality artifacts because the data have not been quality controlled. Oceanic Niño Index (ONI) is produced
-by the US National Oceanic and Atmospheric Administration's [Climate Prediction Center]
-(https://origin.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ONI_v5.php). The index is based
-on sea surface temperature anomalies in the Niño 3.4 region of the tropical Pacific Ocean.
+The Analysis and Help tabs in the app explain the plots and controls.
 
-#### Analysis
-###### Snow Ranges
-The primary elements of the plot are median snow water equivalent grouping by day of the hydrological year
-and range about that median expressed as one standard deviation of the data for that hydrological day.
-A trace and range are shown for each of the full record (in grey) and for the record subset by the selected
-ENSO strength colorized with reds showing selections with ENSO positive (El Niño) overall and
-blues for selections with ENSO negative (La Niña). For example, if the ONI range is -0.5 to 2, the
-midpoint of the range is 1.25 and thus the plot of the subset will be red in color. 
-###### The Oceanic Niño Index
-The Oceanic Niño Index for a given year is taken as the extrema for the winter season of interest.
-The underlying ONI data are over three-month periods and incorporate the seasons OND through MAM.
-Rules for the hydrological year are applied. So, for example, if the extrema of the ONI falls in
-either the OND or NDJ seasons of the year 2005, the ascribed year will be 2006. The slider element
-of the app is labelled with subjective ENSO strengths. These are mapped to ONI as follows:
+### How it works
 
-* -0.5 to 0.5 is ENSO neutral
-* -1.3 or 1.3 are mapped as moderate events
-* -2.7 or 2.7 are mapped as extreme events. 
+```
+BC snow data, station metadata, CPC RONI
+        │  ingest.py: conditional downloads every 3 hours, sanity checks, replace what each file covers
+        ▼
+SQLite database (snowdb.py)                ./data/snow.sqlite, or $SNOWAPP_DB
+        │  datastore.py: in-memory snapshot, rebuilt when the data change
+        ▼
+Dash app (snowapp.py) ── snowmap.py, snowplot.py (figures) ── snowdata.py (analysis)
+```
 
-ONI is resolved and may be selected at 0.1 degree increments.
+* **`ingest.py`** fetches each source with a conditional GET, so a check that finds nothing new costs one small
+  request per source. Each downloaded file is parsed, checked, and then replaces the date range it covers. A
+  source that fails is logged and skipped, and the database keeps its last good data.
+* **`datastore.py`** runs the ingest in a background thread inside the web process every `SNOWAPP_REFRESH_HOURS`
+  (default 3). When the data change, it rebuilds the tables the callbacks read. On a fresh database the first load
+  takes about a minute, and the page shows a "loading" message that reloads by itself.
+* **`snowdata.py`** holds the analysis: water years, complete seasons, medians and ranges, current anomalies, and
+  ENSO values by water year. These are plain functions of pandas objects, covered by the tests.
+* **`snowapp.ipynb`** is a scratch notebook that imports the modules for exploring the data. The app doesn't use it.
 
-###### Individual Snow Seasons
-The data from the individual years are presented as-is. As described above, the current year's data
-is likely to have spurious values that have not been corrected by quality control software.
+### Running locally
 
-#### How-to
-The primary component of this webpage is a graph that depicts the evolution of accumulated 
-snow amount over the water year that runs from 1 October through 30 September in the 
-subsequent year. User controls are:
+```bash
+python3 -m venv ~/venvs/snowapp       # under WSL, a venv on the Linux side imports much faster than one under /mnt/c
+source ~/venvs/snowapp/bin/activate
+pip install -r requirements-dev.txt
+python ingest.py                      # build or update ./data/snow.sqlite (first run under a minute)
+python snowapp.py                     # http://127.0.0.1:8050
+pytest                                # 33 tests, a few seconds, no network needed
+```
 
-* a **checklist** in the upper left to subset data to that with current year data and that with more than 20 years;
-* a **slider** in the upper right that allows for the selection of a range of values of the ENSO strength;
-* a **map** that shows the location of snow-pillow sites in BC; 
-* a **graph** that plots the snow water equivalent for the hydrological year.
+Settings, all optional:
 
-###### The Checklist
-The checklist contains two items whose selection causes the stations available for plotting to be
-subset. By default, the *Require current year?* option is selected to show stations that have data for
-the current year. The second option allows the restriction of available data to those stations with 20 or more
-years of record. Furthermore, a station is considered to have data for a given year only if the timeseries
-more than 80% complete. These longer, more complete records are recommended for investigating the ENSO/snow
-relationship for a given station.
+| Environment variable    | Default              | Meaning                                    |
+|-------------------------|----------------------|--------------------------------------------|
+| `SNOWAPP_DB`            | `./data/snow.sqlite` | Location of the SQLite database            |
+| `SNOWAPP_REFRESH_HOURS` | `3`                  | How often the app checks the sources       |
 
-###### The ENSO Slider
-The slider allows for the selection of a range of values of the ENSO strength as 
-determined by the Oceanic Niño Index. Click and drag the handles or click on the slider
-bar and the range will adjust to your input. The **graph** title will respond and
-show you the currently selected ONI range. To view the entirety of the data for the chosen
-station, select the extreme ends of the range slider to encompass all ENSO conditions.
+The database can be deleted at any time; it is rebuilt from the sources. To look inside it:
+`sqlite3 data/snow.sqlite "SELECT * FROM source_state"`. The tables are `stations`, `swe_daily`, `enso_index`,
+`source_state` and `meta`, described in `snowdb.py`.
 
-###### The Map
-To select a station, zoom in to a station symbol of interest and click on it. The click will
-cause the graph to plot the data for that station and highlight the station in red. There 
-are four button controls in the upper right corner of the map that allow downloading an 
-image of the current map, zooming in, zooming out or resetting the axes. 
+### Deploying
 
-###### The Graph
-What is plotted on the graph is dictated by the other app elements and can also be controlled by
-interacting with the two legends. The legend in the upper-left of the plot controls the 
-presentation of the median and range curves for the station. The legend below the
-graph's axes controls the plotting of individual years. Clicking on a legend entry turns the element 
-on or off. Double clicking turns all elements on or all but the clicked entry off. Finally, the graph and maps
-can both be zoomed into to modify the range of what is plotted. Additional controls in the upper right of 
-the graph alow one to download an image of the current plot, reset the axes or choose a graph 
-selection method.
+The app runs as `gunicorn snowapp:server`. Gunicorn picks up `gunicorn.conf.py` (one process, four threads) on
+both platforms. Python 3.12 comes from `.python-version`.
+
+**Heroku**: `git push heroku main`. The `Procfile` gives the start command. Heroku's disk is wiped at every
+restart, so the database is rebuilt each time the dyno starts, roughly daily.
+
+**Railway** (set up in the dashboard; Railway no longer accepts new `railway.toml` files):
+
+1. New service from the GitHub repo, `main` branch. Railway's builder (Railpack) installs `requirements.txt`.
+2. Settings → Deploy: set the **Custom Start Command** to `gunicorn snowapp:server`. Railpack would otherwise
+   guess a Flask command that points at the wrong module. Set the **Healthcheck Path** to `/healthz`.
+3. Add a **Volume** mounted at `/data`, and the variable `SNOWAPP_DB=/data/snow.sqlite`, so the database
+   survives restarts and deploys.
+4. Settings → Networking: generate a `*.up.railway.app` domain to test, then add the custom domain.
+
+### Data notes
+
+* **ENSO index**: CPC made the [Relative Oceanic Niño Index](https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso/roni/)
+  its official ENSO index on 1 February 2026, replacing the ONI. RONI is used throughout. A water year's value is
+  the largest-magnitude RONI among the OND to MAM seasons, with OND and NDJ assigned to the following water year.
+* **Daily values**: BC reports at 16:00 UTC. A few stations report at other times: the Forrest Kerr pillows at
+  00:00 UTC, and some stations hourly for parts of their record. Each reading is assigned to the nearest 16:00 UTC
+  report time, and the reading closest to 16:00 is kept for each station and day.
+* **Complete seasons**: a past water year with data on at least 95% of the days from 1 October to 16 August.
+  Medians, ranges and the "20 complete seasons" filter use only these. The current season is never included.
+* **Map anomaly**: a station's latest reading from the last 3 days of data, as a percentage of its median for that
+  date. Stations are grey when the median is under 10 mm, or when there is no recent reading or no complete season.
+* **Water-year roll-over**: BC restarts `SWDaily.csv` on 1 October but adds the finished water year to the archive
+  weeks later (21 November in 2026). The database keeps the finished year's data in the meantime.
+
+### Data sources
+
+* Snow water equivalent: [BC automated snow weather stations](https://www.env.gov.bc.ca/wsd/data_searches/snow/asws/data/),
+  BC Ministry of Environment and Climate Change Strategy and partners.
+* Station metadata: BC Data Catalogue, `WHSE_WATER_MANAGEMENT.SSL_SNOW_ASWS_STNS_SP`. `snow/SNW_ASWS.csv` is a
+  snapshot, used only if the catalogue can't be reached when the database is first built.
+  See `snow/BC_Data_Catalogue_License.txt`.
+* RONI: NOAA Climate Prediction Center, `https://www.cpc.ncep.noaa.gov/data/indices/RONI.ascii.txt`.
 
 #### Disclaimer
 This tool is intended for educational or entertainment purposes only. Official analysis of the snow and
-water supply status for British Columbia is available from the 
+water supply status for British Columbia is available from the
 [BC River Forecast Centre](https://www2.gov.bc.ca/gov/content/environment/air-land-water/water/drought-flooding-dikes-dams/river-forecast-centre/snow-survey-water-supply-bulletin).
-The author makes no warranty 
-nor is liable for anything associated with or resulting from the use of the app or the underlying data. 
-No claims for data correctness or accuracy are made. This application is not affiliated with the Government 
-of British Columbia, BC Hydro, Rio Tinto or Metro Vancouver. 
+The author makes no warranty
+nor is liable for anything associated with or resulting from the use of the app or the underlying data.
+No claims for data correctness or accuracy are made. This application is not affiliated with the Government
+of British Columbia, BC Hydro, Rio Tinto or Metro Vancouver.
 
 #### Author and Contact Information
 Faron Anslow
 <faron.anslow@gmail.com>
-___
