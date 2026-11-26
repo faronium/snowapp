@@ -245,3 +245,23 @@ def enso_relationship(enso_values, values):
             result['r'], result['p'] = r, p
             result['slope'], result['intercept'] = np.polyfit(x[ok], y[ok], 1)
     return result
+
+
+def fdr_significant(pvalues, q=0.10):
+    """
+    Which p-values are significant when controlling the false discovery rate at q (Benjamini and Hochberg,
+    1995): the largest k with p(k) <= q * k / m sets the cut-off. Wilks (2016) recommends q = 0.10 for maps of
+    spatially correlated local tests, which keeps the chance of a falsely "significant" map near 0.05.
+    """
+    p = np.asarray(pvalues, dtype=float)
+    ok = ~np.isnan(p)
+    significant = np.zeros(len(p), dtype=bool)
+    m = int(ok.sum())
+    if m == 0:
+        return significant
+    ranked = np.sort(p[ok])
+    below = ranked <= q * np.arange(1, m + 1) / m
+    if below.any():
+        cutoff = ranked[np.max(np.where(below)[0])]
+        significant[ok] = p[ok] <= cutoff
+    return significant

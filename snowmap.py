@@ -1,6 +1,6 @@
 """
-The station map: the figure, its basemap, and the HTML pieces layered over it (the anomaly colour legend
-and the Mapbox wordmark). The overlays are styled in assets/map-overlays.css.
+The station maps: the main tab's figure, the basemap shared by both maps, and the HTML pieces layered over
+the maps (colour keys and the Mapbox wordmark). The overlays are styled in assets/map-overlays.css.
 """
 import os
 
@@ -100,26 +100,34 @@ def draw_station_map(stations, show_anomaly):
 
 # ---------------------------------------------------------------- overlays
 
+def key_children(colors_bottom_to_top, ticks, title):
+    """
+    Contents of a colour key: a vertical colour bar (colours listed from bottom to top), tick labels
+    ((position from the top in %, label) pairs) and a title running up the right-hand side.
+    """
+    gradient = f'linear-gradient(to top, {", ".join(colors_bottom_to_top)})'
+    return [
+        html.Div(className='map-legend-bar', style={'background': gradient}),
+        html.Div([html.Div(label, className='map-legend-tick', style={'top': f'{top:g}%'}) for top, label in ticks],
+                 className='map-legend-ticks'),
+        html.Div(title, className='map-legend-title'),
+    ]
+
+
+def color_key(key_id, children=None, shown=False):
+    """
+    A colour key laid over a map's top-right corner. Plotly can only place a colour bar at a fraction of the
+    map's width and height, so it can't keep equal pixel gaps from the top and right edges as the map changes
+    size; CSS (assets/map-overlays.css) can.
+    """
+    return html.Div(children or [], id=key_id, className='map-legend', style={'display': 'flex' if shown else 'none'})
+
+
 def anomaly_legend():
-    """
-    The colour key for the anomaly colours, as HTML laid over the map's top-right corner. Plotly can only
-    place a colour bar at a fraction of the map's width and height, so it can't keep equal pixel gaps from
-    the top and right edges as the map changes size; CSS can.
-    """
-    gradient = f'linear-gradient(to top, {", ".join(ANOM_COLORSCALE)})'   # first colour (red, 25%) at the bottom
+    """The colour key for the anomaly colours (red, 25%, at the bottom), shown when anomalies are switched on."""
     span = ANOM_MAX - ANOM_MIN
-    ticks = [html.Div(label, className='anom-legend-tick', style={'top': f'{100 * (ANOM_MAX - value) / span:g}%'})
-             for value, label in ANOM_TICKS]
-    return html.Div(
-        [
-            html.Div(className='anom-legend-bar', style={'background': gradient}),
-            html.Div(ticks, className='anom-legend-ticks'),
-            html.Div('% of median', className='anom-legend-title'),
-        ],
-        id='anom-legend',
-        className='anom-legend',
-        style={'display': 'none'},
-    )
+    ticks = [(100 * (ANOM_MAX - value) / span, label) for value, label in ANOM_TICKS]
+    return color_key('anom-legend', key_children(ANOM_COLORSCALE, ticks, '% of median'))
 
 
 def mapbox_wordmark():

@@ -17,7 +17,7 @@ BC snow data, station metadata, CPC RONI
 SQLite database (snowdb.py)                ./data/snow.sqlite, or $SNOWAPP_DB
         │  datastore.py: in-memory snapshot, rebuilt when the data change
         ▼
-Dash app (snowapp.py) ── snowmap.py, snowplot.py, snowtrends.py (figures)
+Dash app (snowapp.py) ── snowmap.py, snowplot.py, snowtrends.py, snowtrendmap.py (figures)
                       ── snowdata.py, snowindicators.py, snowgroups.py (analysis)
 ```
 
@@ -29,6 +29,8 @@ Dash app (snowapp.py) ── snowmap.py, snowplot.py, snowtrends.py (figures)
   takes about a minute, and the page shows a "loading" message that reloads by itself.
 * **`snowdata.py`** holds the analysis: water years, complete seasons, medians and ranges, current anomalies, and
   ENSO values by water year. These are plain functions of pandas objects, covered by the tests.
+* **`snowtrendmap.py`** draws the Trends tab's map: every station coloured by the trend (or ENSO correlation)
+  of one indicator, with significance (optionally false-discovery-rate controlled), zoomed to the selection.
 * **`snowgroups.py`** combines stations into sub-basin, region or BC-wide series for the Trends tab and tests
   them for trends (Regional Kendall test) and ENSO relationships.
 * **`snowindicators.py`** derives the snow season indicators and their trend and ENSO statistics for the Trends

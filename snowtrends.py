@@ -137,10 +137,11 @@ def _phase_legend(fig, with_stations=False):
                                  marker=dict(size=6, color=STATION_DOT)), row=1, col=1)
 
 
-GROUP_SUBTITLE = 'Larger markers: more stations reported that year'
+GROUP_NOTE = 'larger markers: more stations reported that year'
 
 
-def _layout(fig, title, subtitle=None):
+def _layout(fig, title, *notes):
+    subtitle = ' \u00b7 '.join(n for n in notes if n)
     fig.update_layout(
         title=dict(text=title, font=dict(size=17), y=0.99, yanchor='top',
                    subtitle=dict(text=subtitle or '', font=dict(size=12, color='rgb(110,110,110)'))),
@@ -178,7 +179,7 @@ def _line(fig, row, col, xs, ys, p):
 
 # ---------------------------------------------------------------- one station
 
-def indicator_timeseries(indicators, enso, title, adjust_enso=False):
+def indicator_timeseries(indicators, enso, title, adjust_enso=False, subtitle=''):
     """Each indicator by water year, coloured by ENSO phase, with a Theil-Sen trend line when n >= 10."""
     if indicators.empty:
         return _empty('No complete seasons for this station')
@@ -212,10 +213,10 @@ def indicator_timeseries(indicators, enso, title, adjust_enso=False):
         else:
             fig.update_yaxes(title_text=si.INDICATORS[col][1], row=row, col=c)
     _phase_legend(fig)
-    return _layout(fig, title + (' (ENSO signal removed)' if adjust_enso else ''))
+    return _layout(fig, title, subtitle, 'ENSO signal removed' if adjust_enso else '')
 
 
-def indicator_vs_enso(indicators, enso, title):
+def indicator_vs_enso(indicators, enso, title, subtitle=''):
     """Each indicator against the water year's RONI, with a least-squares line and correlation when n >= 10."""
     if indicators.empty:
         return _empty('No complete seasons for this station')
@@ -248,7 +249,7 @@ def indicator_vs_enso(indicators, enso, title):
     for c in (1, 2):
         fig.update_xaxes(title_text='Relative Oceanic Niño Index (RONI)', row=3, col=c)
     _phase_legend(fig)
-    return _layout(fig, title)
+    return _layout(fig, title, subtitle)
 
 
 # ---------------------------------------------------------------- a group of stations
@@ -296,7 +297,7 @@ def _counts(analysis):
     return st.notna().sum(axis=1) if not st.empty else pd.Series(dtype=int)
 
 
-def group_timeseries(analyses, enso, title):
+def group_timeseries(analyses, enso, title, subtitle=''):
     """The regional series of each indicator by water year, with the Regional Kendall trend when n >= 10 years."""
     if all(a['series'].empty for a in analyses.values()):
         return _empty('Not enough stations with complete seasons in this group')
@@ -331,10 +332,10 @@ def group_timeseries(analyses, enso, title):
             _line(fig, row, c, xs, _to_display(t['intercept'] + t['slope'] * xs, a['log']), t['p'])
     _station_counts(fig, analyses)
     _phase_legend(fig, with_stations=True)
-    return _layout(fig, title + (' (ENSO signal removed)' if adjusted else ''), GROUP_SUBTITLE)
+    return _layout(fig, title, subtitle, 'ENSO signal removed' if adjusted else '', GROUP_NOTE)
 
 
-def group_vs_enso(analyses, enso, title):
+def group_vs_enso(analyses, enso, title, subtitle=''):
     """The regional series of each indicator against RONI, with a least-squares line and correlation."""
     if all(a['series'].empty for a in analyses.values()):
         return _empty('Not enough stations with complete seasons in this group')
@@ -370,4 +371,4 @@ def group_vs_enso(analyses, enso, title):
         fig.update_xaxes(title_text='Relative Oceanic Niño Index (RONI)', row=3, col=c)
     _station_counts(fig, analyses)
     _phase_legend(fig, with_stations=True)
-    return _layout(fig, title, GROUP_SUBTITLE)
+    return _layout(fig, title, subtitle, GROUP_NOTE)

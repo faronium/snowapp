@@ -101,6 +101,31 @@ def analysis_desc_md(dcc):
         are solid when p < 0.05. Points are coloured by the water year's ENSO phase (RONI of +0.5 or more is
         El Niño, -0.5 or less is La Niña).
 
+        #### Trends Map (Trends tab)
+        The map on the Trends tab colours every station by one snow season indicator, chosen under *Map shows*
+        (snow-off date by default). With *Indicators by water year* selected, the colour is the station's trend
+        per decade; with *Indicators vs RONI*, its correlation with RONI. The map follows the *Period* and
+        *Remove the ENSO (RONI) signal* settings, so it always matches the figure beside it.
+
+        Trends are in days per decade for dates and season length. For peak snow water equivalent and melt
+        rate they are in percent per decade, from the Theil-Sen slope of the logarithm, so that stations with
+        large and small snowpacks can be compared. Red marks change toward less snow: a later snow-on date,
+        lower peak snow water equivalent, an earlier snow-off date, a shorter season or an earlier peak.
+        Correlations with RONI are coloured the same way, so red means less snow in El Niño years. Melt rate
+        has no such direction and uses a single red scale, darker for higher values. Colours stop changing
+        beyond 10 days per decade (15 for season length), 15% per decade, or a correlation of 0.6.
+
+        Stations ringed in black are significant (p < 0.05); the rest are faded, and small grey markers have
+        fewer than 10 seasons in the period. With around 100 stations, about 5 would pass p < 0.05 by chance
+        alone. Ticking *Map: control the false discovery rate across stations* applies the Benjamini-Hochberg
+        procedure instead, with the false discovery rate set to 10% as Wilks (2016) recommends for maps whose
+        stations are correlated with each other (this keeps the chance of a falsely significant map near 5%).
+
+        The map zooms to the selection: about 100 km around a single station, the stations of a sub-basin or
+        region with some margin around them, or the whole province for *All of BC*. The selection has a green
+        halo and the other stations are lightened. Clicking a station on either map selects it on the Trends
+        tab; with a sub-basin or region showing, that switches to the clicked station's group.
+
         #### Grouped Stations (Trends tab)
         A single station's record is often too short and too variable for a trend to stand out. The Trends tab
         can instead combine a station with others nearby: its **sub-basin** (stations whose codes share the
@@ -176,6 +201,9 @@ def analysis_desc_md(dcc):
         some results will reach p < 0.05 by chance, so a single significant result should be read with care.
 
         ###### References
+        Benjamini, Y. and Hochberg, Y. (1995). Controlling the false discovery rate: a practical and powerful
+        approach to multiple testing. *Journal of the Royal Statistical Society B*, 57, 289-300.
+
         Dietz, E.J. and Killeen, T.J. (1981). A nonparametric multivariate test for monotone trend with
         pharmaceutical applications. *Journal of the American Statistical Association*, 76, 169-174.
 
@@ -187,6 +215,10 @@ def analysis_desc_md(dcc):
 
         Sen, P.K. (1968). Estimates of the regression coefficient based on Kendall's tau. *Journal of the
         American Statistical Association*, 63, 1379-1389.
+
+        Wilks, D.S. (2016). "The stippling shows statistically significant grid points": how research results
+        are routinely overstated and overinterpreted, and what to do about it. *Bulletin of the American
+        Meteorological Society*, 97, 2263-2273.
         '''
     )
 
@@ -205,7 +237,7 @@ def how_to_md(dcc):
         snow amount over the water year that runs from 1 October through 30 September in the
         subsequent year. User controls are:
 
-        * **checkboxes** in the controls panel below the map to choose which stations are shown and how they are coloured;
+        * **checkboxes** in the controls panel above the map to choose which stations are shown and how they are coloured;
         * a **slider** in the controls panel that allows for the selection of a range of values of the ENSO strength;
         * a **map** that shows the location of snow-pillow sites in BC;
         * a **graph** that plots the snow water equivalent for the hydrological year.
@@ -245,7 +277,9 @@ def how_to_md(dcc):
         signal before testing trends* tests for a trend in what is left after the ENSO influence is taken out
         (it applies to *Indicators by water year*, and is greyed out for *Indicators vs RONI*). *Period* sets
         the seasons used: since 1990 (the default) or the full record. For groups, *Same stations throughout*
-        keeps only stations that reported in nearly every season of the period.
+        keeps only stations that reported in nearly every season of the period. The Trends map colours every
+        station by the trend (or ENSO correlation) of the indicator chosen under *Map shows* and zooms to the
+        selection; click a station on it to select that station.
         The definitions and statistics are described on the Analysis tab.
 
         ###### The Graph

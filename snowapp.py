@@ -24,11 +24,13 @@ import logging
 
 import dash_bootstrap_components as dbc
 import pandas as pd
-from dash import Dash, Input, Output, State, dcc, html, no_update
+from dash import Dash, Input, Output, State, ctx, dcc, html, no_update
 
 import datastore
 import snowdata
 from documentation import analysis_desc_md, footer_text_md, how_to_md
+import snowmap
+import snowtrendmap
 from snowmap import anomaly_legend, draw_station_map, mapbox_wordmark
 from snowplot import snow_lineplot
 import snowgroups
@@ -217,75 +219,86 @@ def fixed_options(disabled):
 
 
 def make_trends_tab(snap, default_station):
-    '''The Trends tab: snow season indicators for one station, by water year or against RONI.'''
-    options = [{'label': f"{sid} {row['name']} ({row['n_seasons']} complete seasons)", 'value': sid}
-               for sid, row in snap.stations.iterrows()]
+    '''
+    The Trends tab: snow season indicators for a station or a group of stations, by water year or against
+    RONI, with a map of every station's trend (or ENSO relationship) for one indicator.
+    '''
+    options = [{'label': f"{sid} {row['name']} ({int(row['n_seasons']) if pd.notna(row['n_seasons']) else 0} complete seasons)",
+                'value': sid} for sid, row in snap.stations.iterrows()]
+    radio = dict(labelStyle={'display': 'block', 'margin': '4px 0'})
+    controls = dbc.Card([
+        dbc.CardHeader("Trend Controls", style=CARD_HEADER_STYLE),
+        dbc.CardBody([
+            dbc.Row([
+                dbc.Col([
+                    html.Label("Station (or click one on a map)"),
+                    dcc.Dropdown(id='trend-station', options=options, value=default_station, clearable=False),
+                    html.Label("Map shows", className='mt-2'),
+                    dcc.Dropdown(id='trend-map-indicator', clearable=False, value='snow_off_day',
+                                 options=[{'label': snowtrendmap.si.INDICATORS[c][0], 'value': c} for c in PANELS]),
+                ], width=12, lg=4),
+                dbc.Col([
+                    html.Label("Show"),
+                    dcc.RadioItems(
+                        id='trend-level', value='station', **radio,
+                        options=[{'label': ' This station', 'value': 'station'},
+                                 {'label': ' Its sub-basin (first two characters of the code)', 'value': 'subbasin'},
+                                 {'label': ' Its region (first character)', 'value': 'region'},
+                                 {'label': ' All of BC', 'value': 'bc'}],
+                    ),
+                ], width=12, lg=3),
+                dbc.Col([
+                    html.Label("View"),
+                    dcc.RadioItems(id='trend-view', value='timeseries', **radio,
+                                   options=[{'label': ' Indicators by water year', 'value': 'timeseries'},
+                                            {'label': ' Indicators vs RONI', 'value': 'enso'}]),
+                    html.Label("Period", className='mt-1'),
+                    dcc.RadioItems(id='trend-period', value='1990', **radio,
+                                   options=[{'label': ' Since 1990', 'value': '1990'},
+                                            {'label': ' Full record', 'value': 'full'}]),
+                ], width=12, lg=2),
+                dbc.Col([
+                    dcc.Checklist(id='trend-fixed', options=fixed_options(disabled=True), value=[],
+                                  style={'opacity': 0.45}),
+                    dcc.Checklist(id='trend-adjust', options=adjust_options(disabled=False), value=[],
+                                  className='mt-2'),
+                    dcc.Checklist(id='trend-fdr', value=[], className='mt-2', options=[{
+                        'label': ' Map: control the false discovery rate across stations', 'value': 'fdr'}]),
+                ], width=12, lg=3),
+            ]),
+        ]),
+        dbc.CardFooter(
+            "Indicators are calculated for each complete season. For a station, trends are Theil-Sen slopes with "
+            "Mann-Kendall significance; for a group, its stations are combined into a regional series and tested "
+            "with the Regional Kendall test. Lines against RONI are least-squares fits with Pearson correlation. "
+            "Lines are solid where p < 0.05 and need at least 10 seasons. Methods are on the Analysis tab.",
+            className='small text-muted',
+        ),
+    ], className='shadow')
+    trend_map = html.Div([
+        dcc.Graph(id='trend-map', config={'modeBarButtonsToRemove': ['pan2d', 'lasso2d', 'select2d']},
+                  style={'height': '78vh'}),
+        snowmap.color_key('trend-legend', shown=True),
+        mapbox_wordmark(),
+    ], className='map-wrapper')
     return dbc.Tab([
+        dbc.Row([dbc.Col([controls], width=12, className='mt-3 mb-4')]),
         dbc.Row([
             dbc.Col([
                 dbc.Card([
-                    dbc.CardHeader("Snow Season Indicators", style=CARD_HEADER_STYLE),
-                    dbc.CardBody([
-                        html.Label("Station (or click one on the map)"),
-                        dcc.Dropdown(id='trend-station', options=options, value=default_station, clearable=False),
-                        html.Label("Show", className='mt-3'),
-                        dcc.RadioItems(
-                            id='trend-level',
-                            options=[{'label': ' This station', 'value': 'station'},
-                                     {'label': ' Its sub-basin (first two characters of the code)', 'value': 'subbasin'},
-                                     {'label': ' Its region (first character)', 'value': 'region'},
-                                     {'label': ' All of BC', 'value': 'bc'}],
-                            value='station',
-                            labelStyle={'display': 'block', 'margin': '6px 0'},
-                        ),
-                        html.Label("View", className='mt-3'),
-                        dcc.RadioItems(
-                            id='trend-view',
-                            options=[{'label': ' Indicators by water year', 'value': 'timeseries'},
-                                     {'label': ' Indicators vs RONI', 'value': 'enso'}],
-                            value='timeseries',
-                            labelStyle={'display': 'block', 'margin': '6px 0'},
-                        ),
-                        html.Label("Period", className='mt-3'),
-                        dcc.RadioItems(
-                            id='trend-period',
-                            options=[{'label': ' Since 1990', 'value': '1990'},
-                                     {'label': ' Full record', 'value': 'full'}],
-                            value='1990',
-                            labelStyle={'display': 'block', 'margin': '6px 0'},
-                        ),
-                        dcc.Checklist(
-                            id='trend-fixed',
-                            options=fixed_options(disabled=True),
-                            value=[],
-                            style={'opacity': 0.45},
-                        ),
-                        dcc.Checklist(
-                            id='trend-adjust',
-                            options=adjust_options(disabled=False),
-                            value=[],
-                            className='mt-2',
-                        ),
-                        html.P(
-                            "Indicators are calculated for each complete season. For a station, trend lines are "
-                            "Theil-Sen slopes with Mann-Kendall significance; for a group, the regional series "
-                            "combines its stations and trends use the Regional Kendall test. Lines against RONI are "
-                            "least-squares fits with Pearson correlation. Lines are solid where p < 0.05 and dashed "
-                            "otherwise, and need at least 10 seasons (or years). Methods are on the Analysis tab.",
-                            className='small text-muted mt-3 mb-0',
-                        ),
-                    ]),
-                ], className='shadow mb-4'),
-            ], width=12, lg=3),
+                    dbc.CardHeader("Trends Map", style=CARD_HEADER_STYLE),
+                    dbc.CardBody([trend_map]),
+                    dbc.CardFooter(id='trend-map-note', className='small text-muted'),
+                ], className='shadow'),
+            ], width=12, lg=4, className='mb-4'),
             dbc.Col([
                 dbc.Card([
                     dbc.CardHeader("Indicators", style=CARD_HEADER_STYLE),
-                    dbc.CardBody([dcc.Graph(id='trend-graph', style={'height': '85vh'})]),
-                ], className='shadow mb-4'),
-            ], width=12, lg=9),
+                    dbc.CardBody([dcc.Graph(id='trend-graph', style={'height': '78vh'})]),
+                ], className='shadow'),
+            ], width=12, lg=8, className='mb-4'),
         ]),
     ], label='Trends')
-
 
 def loading_layout():
     '''Shown until the first data load finishes (about a minute after a restart on a fresh database).'''
@@ -312,6 +325,21 @@ def serve_layout():
                         dbc.Row([
                             dbc.Col([
                                 dbc.Card([
+                                    dbc.CardHeader("Data Selection Controls", style=CARD_HEADER_STYLE),
+                                    dbc.CardBody([
+                                        dbc.Row([
+                                            dbc.Col([reclengthselect], width=2),
+                                            dbc.Col([anomselect], width=2),
+                                            dbc.Col([make_slider(snap.start_range)], width=8),
+                                        ]),
+                                    ]),
+                                    dbc.CardFooter(datastore.status_text(snap), className='small text-muted'),
+                                ], className="shadow")
+                            ], width=12, className="mt-3 mb-4"),
+                        ]),
+                        dbc.Row([
+                            dbc.Col([
+                                dbc.Card([
                                     dbc.CardHeader("Snow Pillow Location Map", style=CARD_HEADER_STYLE),
                                     dbc.CardBody([make_station_map_graph(default_station)]),
                                 ], className="shadow")
@@ -322,21 +350,6 @@ def serve_layout():
                                     dbc.CardBody([snowgraph]),
                                 ], className="shadow")
                             ], width=12, lg=8, className="mb-4"),
-                        ]),
-                        dbc.Row([
-                            dbc.Col([
-                                dbc.Card([
-                                    dbc.CardHeader("Data Selection Controls", style=CARD_HEADER_STYLE),
-                                    dbc.CardBody([
-                                        dbc.Row([
-                                            dbc.Col([reclengthselect], width=2),
-                                            dbc.Col([anomselect], width=2),
-                                            dbc.Col([make_slider(snap.start_range)], width=8),
-                                        ]),
-                                    ]),
-                                    dbc.CardFooter(datastore.status_text(snap), className='small text-muted'),
-                                ])
-                            ], width=12, className="mt-4"),
                         ]),
                     ], label='ENSO Snow BC'),
                     make_trends_tab(snap, default_station),
@@ -457,15 +470,53 @@ def update_line_chart(onirange, clickData):
 @snowapp.callback(
     Output('trend-station', 'value'),
     Input('snow-station-map', 'clickData'),
+    Input('trend-map', 'clickData'),
     prevent_initial_call=True,
 )
-def follow_map_click(clickData):
-    '''Clicking a station on the map also selects it on the Trends tab.'''
+def follow_map_click(main_click, trend_click):
+    '''A click on either map selects that station on the Trends tab.'''
     snap = datastore.current()
     if snap is None:
         return no_update
-    sid = station_from_click(clickData, snap)
+    sid = station_from_click(trend_click if ctx.triggered_id == 'trend-map' else main_click, snap)
     return sid if sid in snap.stations.index else no_update
+
+
+@snowapp.callback(
+    Output('trend-map', 'figure'),
+    Output('trend-legend', 'children'),
+    Output('trend-map-note', 'children'),
+    Input('trend-station', 'value'),
+    Input('trend-level', 'value'),
+    Input('trend-view', 'value'),
+    Input('trend-period', 'value'),
+    Input('trend-adjust', 'value'),
+    Input('trend-map-indicator', 'value'),
+    Input('trend-fdr', 'value'),
+)
+def update_trend_map(sid, level, view, period, adjust, col, fdr):
+    '''
+    Every station coloured by the trend in (or ENSO correlation of) the chosen indicator, with the same period
+    and ENSO setting as the figure, zoomed to the selected station or group.
+    '''
+    snap = datastore.current()
+    if snap is None or sid is None:
+        return no_update, no_update, no_update
+    stat = 'enso' if view == 'enso' else 'trend'
+    start = snowgroups.TREND_START if period == '1990' else None
+    stations = snap.stations
+    stats = snowtrendmap.station_stats(snap.indicators, stations.index, col, snap.enso, start, stat,
+                                       adjust_enso=bool(adjust) and stat == 'trend')
+    if level == 'bc':
+        selected, in_view, revision = None, stations, 'bc'
+    else:
+        selected = snowgroups.group_members(list(stations.index), sid, level)
+        in_view = stations.loc[selected]
+        # Keep a hand-set zoom while the selection stays the same (e.g. changing the indicator), re-centre otherwise.
+        revision = sid if level == 'station' else f'{level}:{snowgroups.group_key(sid, level)}'
+    view = snowtrendmap.view_for(in_view['latitude'], in_view['longitude'], level)
+    fig = snowtrendmap.draw_trend_map(stations, stats, col, stat, selected, view, revision, fdr=bool(fdr))
+    return fig, snowtrendmap.key(col, stat), snowtrendmap.key_note(bool(fdr))
 
 
 @snowapp.callback(
@@ -508,12 +559,12 @@ def update_trend_graph(sid, level, view, period, fixed, adjust):
     when = f'since {start}' if start else 'full record'
     if level == 'station':
         indicators = snowgroups.restrict_period(snap.indicators, [sid], start).get(sid, pd.DataFrame())
-        name = snap.stations['name'].get(sid, '')
+        title = f"{sid} {snap.stations['name'].get(sid, '')}"
         span = snowdata.season_span(list(indicators.index)) if len(indicators) else 'no complete seasons'
         if view == 'enso':
-            return indicator_vs_enso(indicators, snap.enso, f'{sid} {name}: indicators vs RONI, {when} ({span})')
-        return indicator_timeseries(indicators, snap.enso, f'{sid} {name}: snow season indicators, {when} ({span})',
-                                    adjust_enso=adjust)
+            return indicator_vs_enso(indicators, snap.enso, title, subtitle=f'Indicators vs RONI, {when} ({span})')
+        return indicator_timeseries(indicators, snap.enso, title, adjust_enso=adjust,
+                                    subtitle=f'Snow season indicators by water year, {when} ({span})')
     members = snowgroups.group_members(list(snap.indicators), sid, level)
     indicators = snowgroups.restrict_period(snap.indicators, members, start)
     analyses = {}
@@ -522,10 +573,10 @@ def update_trend_graph(sid, level, view, period, fixed, adjust):
         analyses[col] = snowgroups.group_analysis(indicators, use, col, snap.enso, adjust_enso=adjust)
     label = snowgroups.group_label(snowgroups.group_key(sid, level), level)
     used = max(a['n_stations'] for a in analyses.values())
-    title = f'{label}: {used} stations{", the same throughout" if fixed else ""}, {when}'
+    title = f'{label}: {used} stations{", the same throughout" if fixed else ""}'
     if view == 'enso':
-        return group_vs_enso(analyses, snap.enso, f'{title}, regional series vs RONI')
-    return group_timeseries(analyses, snap.enso, f'{title}, regional series by water year')
+        return group_vs_enso(analyses, snap.enso, title, subtitle=f'Regional series vs RONI, {when}')
+    return group_timeseries(analyses, snap.enso, title, subtitle=f'Regional series by water year, {when}')
 
 if __name__ == '__main__':
     snowapp.run(debug=False)

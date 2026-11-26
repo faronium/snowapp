@@ -1,13 +1,13 @@
 /*
- * Overlays on the station map (see snowmap.py): the anomaly colour key in the top-right corner and the
- * Mapbox wordmark in the bottom-left. Sizes are in px because bWLwgP.css sets the root font size to 10px.
+ * Overlays on the maps (see snowmap.py): a colour key in the top-right corner and the Mapbox wordmark
+ * in the bottom-left. Sizes are in px because bWLwgP.css sets the root font size to 10px.
  */
 .map-wrapper {
     position: relative;
 }
 
-/* ---- anomaly colour key: same buffer (6 px) from the top and right edges of the map ---- */
-.anom-legend {
+/* ---- colour key: same buffer (6 px) from the top and right edges of the map ---- */
+.map-legend {
     position: absolute;
     top: 6px;
     right: 6px;
@@ -24,24 +24,24 @@
     z-index: 2;
     pointer-events: none;       /* clicks and hovers go through to the map */
 }
-.anom-legend-bar {
+.map-legend-bar {
     flex: none;
     width: 12px;
     height: 100%;
 }
-.anom-legend-ticks {
+.map-legend-ticks {
     flex: none;
     position: relative;
-    width: 30px;
+    width: 38px;
     height: 100%;
 }
-.anom-legend-tick {
+.map-legend-tick {
     position: absolute;
     left: 0;
     transform: translateY(-50%);
     white-space: nowrap;
 }
-.anom-legend-title {
+.map-legend-title {
     flex: none;
     writing-mode: vertical-rl;
     text-align: center;
@@ -50,11 +50,11 @@
 }
 
 /* ---- the map's toolbar (zoom, reset, download) moves to the top-left so it doesn't cover the key ---- */
-#snow-station-map .modebar-container {
+.map-wrapper .modebar-container {
     left: 0 !important;
     right: auto !important;
 }
-#snow-station-map .modebar {
+.map-wrapper .modebar {
     left: 2px;
     right: auto;
 }
@@ -65,29 +65,29 @@
  * now uses, so the attribution would otherwise sit below the map. These rules follow MapLibre's own CSS.
  * The collapsed "compact" toggle is hidden so the attribution is always readable, as Mapbox requires.
  */
-#snow-station-map .maplibregl-ctrl-bottom-right {
+.map-wrapper .maplibregl-ctrl-bottom-right {
     position: absolute;
     right: 0;
     bottom: 0;
     z-index: 2;
     pointer-events: none;
 }
-#snow-station-map .maplibregl-ctrl-bottom-right .maplibregl-ctrl {
+.map-wrapper .maplibregl-ctrl-bottom-right .maplibregl-ctrl {
     float: right;
     margin: 0;
     pointer-events: auto;
 }
-#snow-station-map .maplibregl-ctrl-attrib {
+.map-wrapper .maplibregl-ctrl-attrib {
     padding: 0 5px;
     background: rgba(255, 255, 255, 0.75);
     font-family: "Open Sans", verdana, arial, sans-serif;
     font-size: 12px;
     line-height: 20px;
 }
-#snow-station-map .maplibregl-ctrl-attrib-button {
+.map-wrapper .maplibregl-ctrl-attrib-button {
     display: none;
 }
-#snow-station-map .maplibregl-ctrl-attrib-inner {
+.map-wrapper .maplibregl-ctrl-attrib-inner {
     display: block !important;
 }
 
