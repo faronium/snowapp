@@ -92,8 +92,35 @@ def _empty(message):
     return fig
 
 
-def _grid(titles):
-    return make_subplots(rows=3, cols=2, subplot_titles=titles, vertical_spacing=0.11, horizontal_spacing=0.09)
+def _grid(titles, with_counts=False):
+    if not with_counts:
+        return make_subplots(rows=3, cols=2, subplot_titles=titles, vertical_spacing=0.11, horizontal_spacing=0.09)
+    # Group views add a full-width row at the bottom for the number of stations contributing each year.
+    return make_subplots(rows=4, cols=2, subplot_titles=list(titles) + ['Stations contributing each year'],
+                         specs=[[{}, {}], [{}, {}], [{}, {}], [{'colspan': 2}, None]],
+                         row_heights=[0.29, 0.29, 0.29, 0.13], vertical_spacing=0.085, horizontal_spacing=0.09)
+
+
+def _station_counts(fig, analyses):
+    """
+    Bar chart of the number of stations contributing to the regional series each year (the most for any
+    indicator). Years with too few stations to enter the series are drawn lighter.
+    """
+    counts = pd.concat([_counts(a) for a in analyses.values() if not a['stations'].empty], axis=1)
+    if counts.empty:
+        return
+    n = counts.max(axis=1).astype(int).sort_index()
+    n = n[n > 0]
+    used = n >= sg.MIN_STATIONS_PER_YEAR
+    fig.add_trace(go.Bar(
+        x=n.index, y=n.values, showlegend=False,
+        marker=dict(color=['rgb(110,110,110)' if u else 'rgb(200,200,200)' for u in used], line=dict(width=0)),
+        hovertext=[f'WY{wy}: {v} station{"s" if v != 1 else ""}' + ('' if u else ' (too few for the regional series)')
+                   for wy, v, u in zip(n.index, n.values, used)],
+        hoverinfo='text',
+    ), row=4, col=1)
+    fig.update_yaxes(title_text='stations', rangemode='tozero', row=4, col=1)
+    fig.update_xaxes(title_text='Water year', row=4, col=1)
 
 
 def _cell(k):
@@ -284,7 +311,7 @@ def group_timeseries(analyses, enso, title):
             titles.append(f'{label}: not enough stations')
         else:
             titles.append(f'{label}: too few years for a trend (n = {t["n"]})')
-    fig = _grid(titles)
+    fig = _grid(titles, with_counts=True)
     for k, col in enumerate(PANELS):
         row, c = _cell(k)
         a = analyses[col]
@@ -302,6 +329,7 @@ def group_timeseries(analyses, enso, title):
         if 'slope' in t:
             xs = np.array([years.min(), years.max()], dtype=float)
             _line(fig, row, c, xs, _to_display(t['intercept'] + t['slope'] * xs, a['log']), t['p'])
+    _station_counts(fig, analyses)
     _phase_legend(fig, with_stations=True)
     return _layout(fig, title + (' (ENSO signal removed)' if adjusted else ''), GROUP_SUBTITLE)
 
@@ -316,7 +344,7 @@ def group_vs_enso(analyses, enso, title):
         r = a['enso_rel']
         titles.append(f'{label}: r = {r["r"]:+.2f}, {_fmt_p(r["p"])} ({r["n"]} years, {a["n_stations"]} stations)' if 'r' in r
                       else f'{label}: too few years (n = {r["n"]})')
-    fig = _grid(titles)
+    fig = _grid(titles, with_counts=True)
     roni = lambda wy: enso.get(wy, np.nan)
     for k, col in enumerate(PANELS):
         row, c = _cell(k)
@@ -340,5 +368,6 @@ def group_vs_enso(analyses, enso, title):
             _line(fig, row, c, xs, _to_display(r['intercept'] + r['slope'] * xs, a['log']), r['p'])
     for c in (1, 2):
         fig.update_xaxes(title_text='Relative Oceanic Niño Index (RONI)', row=3, col=c)
+    _station_counts(fig, analyses)
     _phase_legend(fig, with_stations=True)
     return _layout(fig, title, GROUP_SUBTITLE)

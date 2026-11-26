@@ -156,7 +156,9 @@ def analysis_desc_md(dcc):
         Before 1990 a regional value rests on a handful of stations, and the long records of those few early
         stations would carry much of the weight in a full-record trend. Trends are therefore calculated **since
         1990** by default, when the network became large enough to represent the province; *Full record* uses
-        every season instead. In the group views, larger markers show years that more stations reported.
+        every season instead. In the group views, the bar chart along the bottom shows how many stations
+        contributed each year (lighter bars are years with too few stations to enter the regional series),
+        and larger markers show years that more stations reported.
 
         *Same stations throughout* keeps only the stations that reported at least 80% of the seasons in the
         period, so that the make-up of the regional series cannot drift as stations open and close. It uses
