@@ -30,7 +30,8 @@ import datastore
 from documentation import analysis_desc_md, footer_text_md, how_to_md
 from snowmap import anomaly_legend, draw_station_map, mapbox_wordmark
 from snowplot import snow_lineplot
-from snowtrends import indicator_timeseries, indicator_vs_enso
+import snowgroups
+from snowtrends import PANELS, group_timeseries, group_vs_enso, indicator_timeseries, indicator_vs_enso
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
 
@@ -212,6 +213,16 @@ def make_trends_tab(snap, default_station):
                     dbc.CardBody([
                         html.Label("Station (or click one on the map)"),
                         dcc.Dropdown(id='trend-station', options=options, value=default_station, clearable=False),
+                        html.Label("Show", className='mt-3'),
+                        dcc.RadioItems(
+                            id='trend-level',
+                            options=[{'label': ' This station', 'value': 'station'},
+                                     {'label': ' Its sub-basin (first two characters of the code)', 'value': 'subbasin'},
+                                     {'label': ' Its region (first character)', 'value': 'region'},
+                                     {'label': ' All of BC', 'value': 'bc'}],
+                            value='station',
+                            labelStyle={'display': 'block', 'margin': '6px 0'},
+                        ),
                         html.Label("View", className='mt-3'),
                         dcc.RadioItems(
                             id='trend-view',
@@ -220,11 +231,18 @@ def make_trends_tab(snap, default_station):
                             value='timeseries',
                             labelStyle={'display': 'block', 'margin': '6px 0'},
                         ),
+                        dcc.Checklist(
+                            id='trend-adjust',
+                            options=[{'label': ' Remove the ENSO (RONI) signal before testing trends', 'value': 'adjust'}],
+                            value=[],
+                            className='mt-3',
+                        ),
                         html.P(
-                            "Indicators are calculated for each complete season. Trend lines are Theil-Sen slopes "
-                            "with Mann-Kendall significance; lines against RONI are least-squares fits with Pearson "
-                            "correlation. Lines are solid where p < 0.05 and dashed otherwise, and are shown only "
-                            "with at least 10 seasons. Definitions are on the Analysis tab.",
+                            "Indicators are calculated for each complete season. For a station, trend lines are "
+                            "Theil-Sen slopes with Mann-Kendall significance; for a group, the regional series "
+                            "combines its stations and trends use the Regional Kendall test. Lines against RONI are "
+                            "least-squares fits with Pearson correlation. Lines are solid where p < 0.05 and dashed "
+                            "otherwise, and need at least 10 seasons (or years). Methods are on the Analysis tab.",
                             className='small text-muted mt-3 mb-0',
                         ),
                     ]),
@@ -424,19 +442,32 @@ def follow_map_click(clickData):
 @snowapp.callback(
     Output('trend-graph', 'figure'),
     Input('trend-station', 'value'),
+    Input('trend-level', 'value'),
     Input('trend-view', 'value'),
+    Input('trend-adjust', 'value'),
 )
-def update_trend_graph(sid, view):
+def update_trend_graph(sid, level, view, adjust):
     snap = datastore.current()
     if snap is None or sid is None:
         return no_update
-    indicators = snap.indicators.get(sid, pd.DataFrame())
-    name = snap.stations['name'].get(sid, '')
-    span = snap.stations['span'].get(sid, '')
+    adjust = bool(adjust) and view == 'timeseries'    # removing ENSO only applies to the trend view
+    if level == 'station':
+        indicators = snap.indicators.get(sid, pd.DataFrame())
+        name = snap.stations['name'].get(sid, '')
+        span = snap.stations['span'].get(sid, '')
+        if view == 'enso':
+            return indicator_vs_enso(indicators, snap.enso, f'{sid} {name}: indicators vs RONI ({span})')
+        return indicator_timeseries(indicators, snap.enso, f'{sid} {name}: snow season indicators ({span})',
+                                    adjust_enso=adjust)
+    members = snowgroups.group_members(list(snap.indicators), sid, level)
+    analyses = {col: snowgroups.group_analysis(snap.indicators, members, col, snap.enso, adjust_enso=adjust)
+                for col in PANELS}
+    label = snowgroups.group_label(snowgroups.group_key(sid, level), level)
+    used = max(a['n_stations'] for a in analyses.values())
+    title = f'{label}: {used} stations combined'
     if view == 'enso':
-        return indicator_vs_enso(indicators, snap.enso, f'{sid} {name}: indicators vs RONI ({span})')
-    return indicator_timeseries(indicators, snap.enso, f'{sid} {name}: snow season indicators ({span})')
-
+        return group_vs_enso(analyses, snap.enso, f'{title}, regional series vs RONI')
+    return group_timeseries(analyses, snap.enso, f'{title}, regional series by water year')
 
 if __name__ == '__main__':
     snowapp.run(debug=False)

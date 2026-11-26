@@ -100,6 +100,73 @@ def analysis_desc_md(dcc):
         approximate two-sided p-value. Both are shown only for indicators with at least 10 seasons, and lines
         are solid when p < 0.05. Points are coloured by the water year's ENSO phase (RONI of +0.5 or more is
         El Niño, -0.5 or less is La Niña).
+
+        #### Grouped Stations (Trends tab)
+        A single station's record is often too short and too variable for a trend to stand out. The Trends tab
+        can instead combine a station with others nearby: its **sub-basin** (stations whose codes share the
+        first two characters, such as 2D), its **region** (the first character, such as 2), or **all of BC**.
+
+        ###### The regional series
+        Each indicator value is treated as *station level + year effect*, and both are estimated together by
+        least squares from all the stations in the group. The year effects form the regional series: how much
+        earlier or later, or larger or smaller, that season was across the group. Each station's typical level
+        is removed, so a high, snowy station and a low one can be combined.
+
+        The levels are estimated together, rather than taking each station's own average or standardizing it
+        to z-scores, because stations cover different years. A station that only reports in recent decades has
+        an average from those recent years alone; anomalies from that average would pull the regional series
+        toward zero in exactly the years it reports, and dilute any trend. Fitted together, the station is
+        compared with the others in the years they share. Stations whose years never overlap with the rest of
+        the group are left out.
+
+        Dates and season length are combined in days, so results read as *days earlier or later than normal*.
+        Peak snow water equivalent and melt rate are combined on a logarithmic scale, so a year's value is a
+        ratio (*35% below normal*) and large and small snowpacks count in proportion. *Normal* is the group's
+        average over its record. A station needs at least 5 seasons of an indicator to be included, and a year
+        enters the regional series only if at least 2 stations reported it. Each station's own values, relative
+        to its level, are shown as faint grey points behind the regional series.
+
+        ###### Trends for a group
+        Stations in a group share most of their year-to-year variation; for snow-off date and peak snow water
+        equivalent, stations in the same sub-basin typically correlate at about 0.7 to 0.8 from year to year.
+        Their records are therefore far from independent, and treating every station-season as a separate
+        observation would greatly overstate significance. The trend is tested with the **Regional Kendall
+        test** (Helsel and Frans, 2006), which adds up the Mann-Kendall statistic across stations and corrects
+        its variance for the correlation between them (Dietz and Killeen, 1981, with missing years handled as
+        in Hirsch and Slack, 1984). The regional slope is the median of the slopes between every pair of
+        seasons within each station, pooled over the group, and is given per decade (in % per decade for snow
+        water equivalent and melt rate). Grouping helps most for the noisier indicators (peak date, snow-on
+        date and melt rate) and by joining records that cover different periods into a longer one.
+
+        ###### ENSO relationship for a group
+        The regional series is compared with each water year's RONI using a least-squares line and the Pearson
+        correlation, with one value per year.
+
+        ###### Removing the ENSO signal
+        With *Remove the ENSO (RONI) signal before testing trends* ticked, the part of each year's value
+        explained by that year's RONI (from the least-squares fit above, or the station's own fit for a single
+        station) is subtracted before the trend is tested. Much of the year-to-year variation in BC snow is
+        tied to ENSO, so removing it can reveal a smaller trend underneath. The result is the trend that is not
+        explained by year-to-year ENSO variability; if the mix of El Niño and La Niña years changed over the
+        record, this trend can differ from the plain one.
+
+        ###### Caveats
+        Groups mix stations at different elevations, which can respond differently to a warming climate. The
+        stations in a group change over time as stations open and close. With six indicators and many groups,
+        some results will reach p < 0.05 by chance, so a single significant result should be read with care.
+
+        ###### References
+        Dietz, E.J. and Killeen, T.J. (1981). A nonparametric multivariate test for monotone trend with
+        pharmaceutical applications. *Journal of the American Statistical Association*, 76, 169-174.
+
+        Helsel, D.R. and Frans, L.M. (2006). Regional Kendall test for trend. *Environmental Science &
+        Technology*, 40, 4066-4073.
+
+        Hirsch, R.M. and Slack, J.R. (1984). A nonparametric trend test for seasonal data with serial
+        dependence. *Water Resources Research*, 20, 727-732.
+
+        Sen, P.K. (1968). Estimates of the regression coefficient based on Kendall's tau. *Journal of the
+        American Statistical Association*, 63, 1379-1389.
         '''
     )
 
@@ -151,10 +218,12 @@ def how_to_md(dcc):
 
         ###### The Trends Tab
         The Trends tab shows snow season indicators (peak snow, snow-on and snow-off dates, season length and
-        peak melt rate) for one station at a time. Choose the station from the list, or click it on the map of
-        the main tab. *Indicators by water year* shows each indicator over time with its trend;
-        *Indicators vs RONI* shows each one against the strength of El Niño or La Niña that year. The
-        definitions and statistics are described on the Analysis tab.
+        peak melt rate). Choose a station from the list, or click it on the map of the main tab. Under *Show*,
+        pick that station alone or combine it with the other stations in its sub-basin, its region, or all of
+        BC. *Indicators by water year* shows each indicator over time with its trend; *Indicators vs RONI*
+        shows each one against the strength of El Niño or La Niña that year. Ticking *Remove the ENSO (RONI)
+        signal before testing trends* tests for a trend in what is left after the ENSO influence is taken out.
+        The definitions and statistics are described on the Analysis tab.
 
         ###### The Graph
         What is plotted on the graph is dictated by the other app elements and can also be controlled by

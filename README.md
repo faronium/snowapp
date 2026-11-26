@@ -18,7 +18,7 @@ SQLite database (snowdb.py)                ./data/snow.sqlite, or $SNOWAPP_DB
         │  datastore.py: in-memory snapshot, rebuilt when the data change
         ▼
 Dash app (snowapp.py) ── snowmap.py, snowplot.py, snowtrends.py (figures)
-                      ── snowdata.py, snowindicators.py (analysis)
+                      ── snowdata.py, snowindicators.py, snowgroups.py (analysis)
 ```
 
 * **`ingest.py`** fetches each source with a conditional GET, so a check that finds nothing new costs one small
@@ -29,6 +29,8 @@ Dash app (snowapp.py) ── snowmap.py, snowplot.py, snowtrends.py (figures)
   takes about a minute, and the page shows a "loading" message that reloads by itself.
 * **`snowdata.py`** holds the analysis: water years, complete seasons, medians and ranges, current anomalies, and
   ENSO values by water year. These are plain functions of pandas objects, covered by the tests.
+* **`snowgroups.py`** combines stations into sub-basin, region or BC-wide series for the Trends tab and tests
+  them for trends (Regional Kendall test) and ENSO relationships.
 * **`snowindicators.py`** derives the snow season indicators and their trend and ENSO statistics for the Trends
   tab, from the same in-memory data, each time the data change.
 * **`snowapp.ipynb`** is a scratch notebook that imports the modules for exploring the data. The app doesn't use it.
@@ -101,6 +103,13 @@ restart, so the database is rebuilt each time the dyno starts, roughly daily.
   * *Peak melt rate:* the largest 5-day mean daily loss between peak and snow-off.
   * *Trends:* Theil-Sen slopes with Mann-Kendall significance. *ENSO relationship:* Pearson correlation with RONI.
   * Both are shown only with at least 10 seasons.
+* **Grouped stations** (`snowgroups.py`): a station's sub-basin (first two characters of its code), region
+  (first character) or all of BC.
+  * *Regional series:* *station level + year effect*, estimated together by least squares so records
+    of different lengths line up. Dates are combined in days; peak SWE and melt rate on a log scale (%).
+  * *Trend:* the Regional Kendall test (Helsel & Frans 2006), corrected for the correlation between
+    stations, with a pooled Theil-Sen slope.
+  * *Option:* remove the RONI-explained part before testing for a trend.
 * **Water-year roll-over**: BC restarts `SWDaily.csv` on 1 October but adds the finished water year to the archive
   weeks later (21 November in 2026). The database keeps the finished year's data in the meantime.
 

@@ -240,6 +240,8 @@ def enso_relationship(enso_values, values):
     ok = ~np.isnan(x) & ~np.isnan(y)
     result = {'n': int(ok.sum())}
     if ok.sum() >= MIN_TREND_SEASONS:
-        result['r'], result['p'] = correlation(x[ok], y[ok])
-        result['slope'], result['intercept'] = np.polyfit(x[ok], y[ok], 1)
+        r, p = correlation(x[ok], y[ok])
+        if not np.isnan(r):                                 # NaN when either variable doesn't vary
+            result['r'], result['p'] = r, p
+            result['slope'], result['intercept'] = np.polyfit(x[ok], y[ok], 1)
     return result
