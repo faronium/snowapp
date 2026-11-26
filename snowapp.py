@@ -27,6 +27,7 @@ import pandas as pd
 from dash import Dash, Input, Output, State, dcc, html, no_update
 
 import datastore
+import snowdata
 from documentation import analysis_desc_md, footer_text_md, how_to_md
 from snowmap import anomaly_legend, draw_station_map, mapbox_wordmark
 from snowplot import snow_lineplot
@@ -208,6 +209,13 @@ def adjust_options(disabled):
     return [{'label': ADJUST_LABEL, 'value': 'adjust', 'disabled': disabled}]
 
 
+FIXED_LABEL = ' Same stations throughout (each reported at least 80% of the seasons)'
+
+
+def fixed_options(disabled):
+    return [{'label': FIXED_LABEL, 'value': 'fixed', 'disabled': disabled}]
+
+
 def make_trends_tab(snap, default_station):
     '''The Trends tab: snow season indicators for one station, by water year or against RONI.'''
     options = [{'label': f"{sid} {row['name']} ({row['n_seasons']} complete seasons)", 'value': sid}
@@ -238,11 +246,25 @@ def make_trends_tab(snap, default_station):
                             value='timeseries',
                             labelStyle={'display': 'block', 'margin': '6px 0'},
                         ),
+                        html.Label("Period", className='mt-3'),
+                        dcc.RadioItems(
+                            id='trend-period',
+                            options=[{'label': ' Since 1990', 'value': '1990'},
+                                     {'label': ' Full record', 'value': 'full'}],
+                            value='1990',
+                            labelStyle={'display': 'block', 'margin': '6px 0'},
+                        ),
+                        dcc.Checklist(
+                            id='trend-fixed',
+                            options=fixed_options(disabled=True),
+                            value=[],
+                            style={'opacity': 0.45},
+                        ),
                         dcc.Checklist(
                             id='trend-adjust',
                             options=adjust_options(disabled=False),
                             value=[],
-                            className='mt-3',
+                            className='mt-2',
                         ),
                         html.P(
                             "Indicators are calculated for each complete season. For a station, trend lines are "
@@ -447,6 +469,17 @@ def follow_map_click(clickData):
 
 
 @snowapp.callback(
+    Output('trend-fixed', 'options'),
+    Output('trend-fixed', 'style'),
+    Input('trend-level', 'value'),
+)
+def toggle_fixed(level):
+    '''"Same stations throughout" only applies to groups, so grey it out for a single station.'''
+    disabled = level == 'station'
+    return fixed_options(disabled), ({'opacity': 0.45} if disabled else {})
+
+
+@snowapp.callback(
     Output('trend-adjust', 'options'),
     Output('trend-adjust', 'style'),
     Input('trend-view', 'value'),
@@ -462,27 +495,34 @@ def toggle_adjust(view):
     Input('trend-station', 'value'),
     Input('trend-level', 'value'),
     Input('trend-view', 'value'),
+    Input('trend-period', 'value'),
+    Input('trend-fixed', 'value'),
     Input('trend-adjust', 'value'),
 )
-def update_trend_graph(sid, level, view, adjust):
+def update_trend_graph(sid, level, view, period, fixed, adjust):
     snap = datastore.current()
     if snap is None or sid is None:
         return no_update
     adjust = bool(adjust) and view == 'timeseries'    # removing ENSO only applies to the trend view
+    start = snowgroups.TREND_START if period == '1990' else None
+    when = f'since {start}' if start else 'full record'
     if level == 'station':
-        indicators = snap.indicators.get(sid, pd.DataFrame())
+        indicators = snowgroups.restrict_period(snap.indicators, [sid], start).get(sid, pd.DataFrame())
         name = snap.stations['name'].get(sid, '')
-        span = snap.stations['span'].get(sid, '')
+        span = snowdata.season_span(list(indicators.index)) if len(indicators) else 'no complete seasons'
         if view == 'enso':
-            return indicator_vs_enso(indicators, snap.enso, f'{sid} {name}: indicators vs RONI ({span})')
-        return indicator_timeseries(indicators, snap.enso, f'{sid} {name}: snow season indicators ({span})',
+            return indicator_vs_enso(indicators, snap.enso, f'{sid} {name}: indicators vs RONI, {when} ({span})')
+        return indicator_timeseries(indicators, snap.enso, f'{sid} {name}: snow season indicators, {when} ({span})',
                                     adjust_enso=adjust)
     members = snowgroups.group_members(list(snap.indicators), sid, level)
-    analyses = {col: snowgroups.group_analysis(snap.indicators, members, col, snap.enso, adjust_enso=adjust)
-                for col in PANELS}
+    indicators = snowgroups.restrict_period(snap.indicators, members, start)
+    analyses = {}
+    for col in PANELS:
+        use = snowgroups.fixed_network(indicators, members, col) if fixed else members
+        analyses[col] = snowgroups.group_analysis(indicators, use, col, snap.enso, adjust_enso=adjust)
     label = snowgroups.group_label(snowgroups.group_key(sid, level), level)
     used = max(a['n_stations'] for a in analyses.values())
-    title = f'{label}: {used} stations combined'
+    title = f'{label}: {used} stations{", the same throughout" if fixed else ""}, {when}'
     if view == 'enso':
         return group_vs_enso(analyses, snap.enso, f'{title}, regional series vs RONI')
     return group_timeseries(analyses, snap.enso, f'{title}, regional series by water year')

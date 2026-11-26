@@ -124,3 +124,21 @@ def test_station_adjusted():
     adjusted, slope = sg.station_adjusted(values, roni)
     assert slope == pytest.approx(5)
     assert adjusted.std() == pytest.approx(0, abs=1e-9)
+
+
+def test_restrict_period():
+    years = np.arange(1980, 2000)
+    ind = indicators_for({'2A01P': pd.Series(1.0, index=years), '2A02P': pd.Series(2.0, index=years)})
+    out = sg.restrict_period(ind, ['2A01P', '2A02P', '9Z99P'], 1990)
+    assert set(out) == {'2A01P', '2A02P'}
+    assert out['2A01P'].index.min() == 1990
+    assert sg.restrict_period(ind, ['2A01P'], None)['2A01P'].index.min() == 1980
+
+
+def test_fixed_network_keeps_stations_covering_the_period():
+    years = np.arange(1990, 2010)                              # 20 seasons
+    full = pd.Series(1.0, index=years)
+    gappy = full.copy(); gappy.iloc[:3] = np.nan                # 17 of 20 = 85%: kept
+    short = full.where(years >= 2000)                           # 10 of 20 = 50%: dropped
+    ind = indicators_for({'2A01P': full, '2A02P': gappy, '2A03P': short})
+    assert sg.fixed_network(ind, ['2A01P', '2A02P', '2A03P'], 'snow_off_day') == ['2A01P', '2A02P']

@@ -150,6 +150,24 @@ def analysis_desc_md(dcc):
         explained by year-to-year ENSO variability; if the mix of El Niño and La Niña years changed over the
         record, this trend can differ from the plain one.
 
+        ###### The trend period and the growing network
+        The network of snow pillows has grown a great deal: across BC, about 2 stations reported in 1970,
+        5 in 1980, 17 in 1990, 44 in 2000 and more than 80 today, and regions 3 and 4 begin only around 1990.
+        Before 1990 a regional value rests on a handful of stations, and the long records of those few early
+        stations would carry much of the weight in a full-record trend. Trends are therefore calculated **since
+        1990** by default, when the network became large enough to represent the province; *Full record* uses
+        every season instead. In the group views, larger markers show years that more stations reported.
+
+        *Same stations throughout* keeps only the stations that reported at least 80% of the seasons in the
+        period, so that the make-up of the regional series cannot drift as stations open and close. It uses
+        fewer stations but compares like with like.
+
+        Snow in BC also varies from decade to decade with the Pacific Decadal Oscillation. Removing the ENSO
+        signal does not remove this slower variation, so a trend over a few decades can change noticeably with
+        the period chosen. The record is not always a straight line: across BC, snow-off dates moved earlier
+        through the 1970s and 1980s, jumped later around 1990, and have moved earlier again since. A single
+        trend over the full record is smaller than the trend within either part.
+
         ###### Caveats
         Groups mix stations at different elevations, which can respond differently to a warming climate. The
         stations in a group change over time as stations open and close. With six indicators and many groups,
@@ -223,7 +241,9 @@ def how_to_md(dcc):
         BC. *Indicators by water year* shows each indicator over time with its trend; *Indicators vs RONI*
         shows each one against the strength of El Niño or La Niña that year. Ticking *Remove the ENSO (RONI)
         signal before testing trends* tests for a trend in what is left after the ENSO influence is taken out
-        (it applies to *Indicators by water year*, and is greyed out for *Indicators vs RONI*).
+        (it applies to *Indicators by water year*, and is greyed out for *Indicators vs RONI*). *Period* sets
+        the seasons used: since 1990 (the default) or the full record. For groups, *Same stations throughout*
+        keeps only stations that reported in nearly every season of the period.
         The definitions and statistics are described on the Analysis tab.
 
         ###### The Graph

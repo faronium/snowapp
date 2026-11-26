@@ -34,6 +34,8 @@ LEVELS = {'station': 'Station', 'subbasin': 'Sub-basin', 'region': 'Region', 'bc
 LOG_INDICATORS = {'peak_swe', 'melt_rate'}
 MIN_STATION_SEASONS = 5      # a station needs this many seasons of an indicator to be included in a group
 MIN_STATIONS_PER_YEAR = 2    # a year enters the regional series only with at least this many stations
+TREND_START = 1990           # default start of the trend period: the network is too sparse before this
+FIXED_COVERAGE = 0.8         # 'same stations throughout': a station needs this share of the period's seasons
 
 
 # ---------------------------------------------------------------- groups
@@ -52,6 +54,29 @@ def group_members(station_ids, sid, level):
     key = group_key(sid, level)
     return [s for s in station_ids if group_key(s, level) == key]
 
+
+
+def restrict_period(indicators, members, start):
+    """The members' indicator tables limited to water years from start on (all years if start is None)."""
+    out = {}
+    for sid in members:
+        if sid in indicators:
+            d = indicators[sid]
+            out[sid] = d[d.index >= start] if start else d
+    return out
+
+
+def fixed_network(indicators, members, col):
+    """
+    Members with a value of col in at least FIXED_COVERAGE of the years from the group's first to its last
+    season, so that the same stations make up the regional series throughout and its make-up can't drift.
+    """
+    years = [y for sid in members if sid in indicators for y in indicators[sid][col].dropna().index]
+    if not years:
+        return []
+    span = max(years) - min(years) + 1
+    return [sid for sid in members if sid in indicators
+            and indicators[sid][col].notna().sum() >= FIXED_COVERAGE * span]
 
 # ---------------------------------------------------------------- the regional series
 

@@ -110,9 +110,13 @@ def _phase_legend(fig, with_stations=False):
                                  marker=dict(size=6, color=STATION_DOT)), row=1, col=1)
 
 
-def _layout(fig, title):
+GROUP_SUBTITLE = 'Larger markers: more stations reported that year'
+
+
+def _layout(fig, title, subtitle=None):
     fig.update_layout(
-        title=dict(text=title, font=dict(size=17), y=0.99, yanchor='top'),
+        title=dict(text=title, font=dict(size=17), y=0.99, yanchor='top',
+                   subtitle=dict(text=subtitle or '', font=dict(size=12, color='rgb(110,110,110)'))),
         margin=dict(l=10, r=10, t=75, b=10),
         legend=dict(orientation='h', x=1, xanchor='right', y=1.07, yanchor='bottom'),
         hovermode='closest',
@@ -122,12 +126,20 @@ def _layout(fig, title):
     return fig
 
 
-def _points(fig, row, col, x, y, years, enso, hover):
+def _points(fig, row, col, x, y, years, enso, hover, size=8):
     phases = [enso_phase(enso.get(wy)) for wy in years]
     fig.add_trace(go.Scatter(
         x=x, y=y, mode='markers', showlegend=False, hovertext=hover, hoverinfo='text',
-        marker=dict(size=8, color=[PHASE_COLORS[p] for p in phases], line=dict(width=0.5, color='white')),
+        marker=dict(size=size, color=[PHASE_COLORS[p] for p in phases], line=dict(width=0.5, color='white')),
     ), row=row, col=col)
+
+
+def _sizes(analysis, years):
+    """Marker size for each year of a regional series: larger when more stations reported that year."""
+    n = _counts(analysis)
+    counts = np.array([n.get(wy, 0) for wy in years], dtype=float)
+    top = max(counts.max(), 1) if len(counts) else 1
+    return list(5 + 9 * np.sqrt(counts / top))
 
 
 def _line(fig, row, col, xs, ys, p):
@@ -284,14 +296,14 @@ def group_timeseries(analyses, enso, title):
         y = _to_display(a['series'], a['log'])
         hover = [f'WY{wy}: {_fmt_anomaly(v, a["log"])} ({int(n_by_year.get(wy, 0))} stations)'
                  f'<br>RONI {enso.get(wy, np.nan):+.2f} ({enso_phase(enso.get(wy))})' for wy, v in zip(years, y)]
-        _points(fig, row, c, years, y, years, enso, hover)
+        _points(fig, row, c, years, y, years, enso, hover, size=_sizes(a, years))
         _fit_range(fig, row, c, a, y)
         t = a['trend']
         if 'slope' in t:
             xs = np.array([years.min(), years.max()], dtype=float)
             _line(fig, row, c, xs, _to_display(t['intercept'] + t['slope'] * xs, a['log']), t['p'])
     _phase_legend(fig, with_stations=True)
-    return _layout(fig, title + (' (ENSO signal removed)' if adjusted else ''))
+    return _layout(fig, title + (' (ENSO signal removed)' if adjusted else ''), GROUP_SUBTITLE)
 
 
 def group_vs_enso(analyses, enso, title):
@@ -320,7 +332,7 @@ def group_vs_enso(analyses, enso, title):
         y = _to_display(a['series'], a['log'])
         hover = [f'WY{wy}: {_fmt_anomaly(v, a["log"])}<br>RONI {e:+.2f} ({enso_phase(e)})'
                  for wy, v, e in zip(years[ok], y[ok], x[ok])]
-        _points(fig, row, c, x[ok], y[ok], years[ok], enso, hover)
+        _points(fig, row, c, x[ok], y[ok], years[ok], enso, hover, size=_sizes(a, years[ok]))
         _fit_range(fig, row, c, a, y)
         r = a['enso_rel']
         if 'r' in r:
@@ -329,4 +341,4 @@ def group_vs_enso(analyses, enso, title):
     for c in (1, 2):
         fig.update_xaxes(title_text='Relative Oceanic Niño Index (RONI)', row=3, col=c)
     _phase_legend(fig, with_stations=True)
-    return _layout(fig, title)
+    return _layout(fig, title, GROUP_SUBTITLE)
