@@ -176,8 +176,6 @@ def make_station_map_graph(default_station):
         [
             dcc.Graph(
                 id="snow-station-map",
-                # The station plotted when the page opens, in the same form a click on the map produces.
-                clickData={'points': [{'customdata': [default_station]}]},
                 # Remove the selection tools, which would be confused with selecting a station by clicking.
                 config={'modeBarButtonsToRemove': ['pan2d', 'lasso2d', 'select2d']},
                 style={'height': "70vh"},
@@ -218,13 +216,18 @@ def fixed_options(disabled):
     return [{'label': FIXED_LABEL, 'value': 'fixed', 'disabled': disabled}]
 
 
+def station_options(snap):
+    '''Options for the station dropdowns: "ID Name (n complete seasons)" for every station.'''
+    return [{'label': f"{sid} {row['name']} ({int(row['n_seasons']) if pd.notna(row['n_seasons']) else 0} complete seasons)",
+             'value': sid} for sid, row in snap.stations.iterrows()]
+
+
 def make_trends_tab(snap, default_station):
     '''
     The Trends tab: snow season indicators for a station or a group of stations, by water year or against
     RONI, with a map of every station's trend (or ENSO relationship) for one indicator.
     '''
-    options = [{'label': f"{sid} {row['name']} ({int(row['n_seasons']) if pd.notna(row['n_seasons']) else 0} complete seasons)",
-                'value': sid} for sid, row in snap.stations.iterrows()]
+    options = station_options(snap)
     radio = dict(labelStyle={'display': 'block', 'margin': '4px 0'})
     controls = dbc.Card([
         dbc.CardHeader("Trend Controls", style=CARD_HEADER_STYLE),
@@ -332,9 +335,16 @@ def serve_layout():
                                     dbc.CardHeader("Data Selection Controls", style=CARD_HEADER_STYLE),
                                     dbc.CardBody([
                                         dbc.Row([
-                                            dbc.Col([reclengthselect], width=2),
-                                            dbc.Col([anomselect], width=2),
-                                            dbc.Col([make_slider(snap.start_range)], width=8),
+                                            dbc.Col([
+                                                html.Label("Station (or click one on the map)"),
+                                                dcc.Dropdown(id='main-station', options=station_options(snap),
+                                                             value=default_station, clearable=False),
+                                                dbc.Row([
+                                                    dbc.Col([reclengthselect], width=7),
+                                                    dbc.Col([anomselect], width=5),
+                                                ], className='mt-2'),
+                                            ], width=12, lg=4),
+                                            dbc.Col([make_slider(snap.start_range)], width=12, lg=8),
                                         ]),
                                     ]),
                                     dbc.CardFooter(datastore.status_text(snap), className='small text-muted'),
@@ -469,12 +479,13 @@ def toggle_modal(n_clicks, is_open):
     Output('anom-legend', 'style'),
     Input('record-length-current-check', 'value'),
     Input('show-anoms-stat', 'value'),
+    Input('main-station', 'value'),
 )
-def make_station_map(reccheck, anomstat):
+def make_station_map(reccheck, anomstat, sid):
     '''
     Draw the station map, filtered by the checklist: 'rcy' keeps stations with data in the current
-    water year, 'rtmy' keeps stations with at least MIN_SEASONS_FILTER complete seasons. The colour
-    key is shown only when the stations are coloured by anomaly.
+    water year, 'rtmy' keeps stations with at least MIN_SEASONS_FILTER complete seasons. The chosen
+    station is highlighted. The colour key is shown only when the stations are coloured by anomaly.
     '''
     snap = datastore.current()
     if snap is None:
@@ -486,7 +497,7 @@ def make_station_map(reccheck, anomstat):
         stations = stations[stations['n_seasons'] >= MIN_SEASONS_FILTER]
     show_anomaly = bool(anomstat)
     legend_style = {'display': 'flex' if show_anomaly else 'none'}
-    return draw_station_map(stations, show_anomaly=show_anomaly), legend_style
+    return draw_station_map(stations, show_anomaly=show_anomaly, selected=sid), legend_style
 
 
 def station_from_click(click_data, snap):
@@ -503,9 +514,9 @@ def station_from_click(click_data, snap):
 @snowapp.callback(
     Output('snow-station-graph', 'figure'),
     Input('oni-range-slider', 'value'),
-    Input('snow-station-map', 'clickData'),
+    Input('main-station', 'value'),
 )
-def update_line_chart(onirange, clickData):
+def update_line_chart(onirange, sid):
     '''
     Plot the selected station's water years, with the median and range of the full record and of the
     seasons whose ENSO (RONI) value falls in the slider's range.
@@ -513,7 +524,8 @@ def update_line_chart(onirange, clickData):
     snap = datastore.current()
     if snap is None:
         return no_update
-    sid = station_from_click(clickData, snap)
+    if sid not in snap.matrices:
+        sid = DEFAULT_STATION if DEFAULT_STATION in snap.matrices else next(iter(snap.matrices))
     lo, hi = onirange
     selected_years = snap.enso.index[(snap.enso >= lo) & (snap.enso <= hi)]
     if (lo + hi) / 2 > 0:
@@ -539,18 +551,32 @@ def update_line_chart(onirange, clickData):
 # ---------------------------------------------------------------- Trends tab
 
 @snowapp.callback(
+    Output('main-station', 'value'),
     Output('trend-station', 'value'),
+    Input('main-station', 'value'),
+    Input('trend-station', 'value'),
     Input('snow-station-map', 'clickData'),
     Input('trend-map', 'clickData'),
     prevent_initial_call=True,
 )
-def follow_map_click(main_click, trend_click):
-    '''A click on either map selects that station on the Trends tab.'''
+def select_station(main_value, trend_value, main_click, trend_click):
+    '''
+    One station for the whole app: choosing it in either tab's list, or clicking it on either map, selects
+    it in both tabs.
+    '''
     snap = datastore.current()
     if snap is None:
-        return no_update
-    sid = station_from_click(trend_click if ctx.triggered_id == 'trend-map' else main_click, snap)
-    return sid if sid in snap.stations.index else no_update
+        return no_update, no_update
+    source = ctx.triggered_id
+    if source == 'main-station':
+        sid = main_value
+    elif source == 'trend-station':
+        sid = trend_value
+    else:
+        sid = station_from_click(trend_click if source == 'trend-map' else main_click, snap)
+    if sid not in snap.stations.index:
+        return no_update, no_update
+    return (no_update if sid == main_value else sid), (no_update if sid == trend_value else sid)
 
 
 @snowapp.callback(

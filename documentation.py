@@ -183,9 +183,9 @@ def analysis_desc_md(dcc):
 
         The map fits itself to the selection: about 100 km around a single station, the stations of a
         sub-basin or region with some margin, or all of the stations for *All of BC*. The station chosen on the
-        tab has a green halo. Zooming or panning by hand is kept while the selection stays the same. Clicking a
-        station on either map selects it on the Trends tab; with a sub-basin or region showing, that switches
-        to the clicked station's group.
+        tab has a green halo. Zooming or panning by hand is kept while the selection stays the same. Choosing a
+        station in either tab's list, or clicking it on either map, selects it in both tabs; with a sub-basin
+        or region showing, that switches to the station's group.
 
         #### Grouped Stations (Trends tab)
         A single station's record is often too short and too variable for a trend to stand out. The Trends tab
@@ -338,8 +338,10 @@ def how_to_md(dcc):
         station, select the extreme ends of the range slider to encompass all ENSO conditions.
 
         ###### The Map
-        To select a station, zoom in to a station symbol of interest and click on it. The click will
-        cause the graph to plot the data for that station and highlight the station in green. Hovering over
+        To select a station, choose it from the *Station* list above the map, or zoom in to a station symbol
+        of interest and click on it. The graph then plots the data for that station, and the station is
+        highlighted in green. The station chosen here is also chosen on the Trends tab, and the other way
+        around. Hovering over
         a station shows its elevation and operator, its latest snow water equivalent, and its median for that
         date with the seasons the median is based on. Button controls in the upper left corner of the map
         (shown when the pointer is over the map) allow zooming in, zooming out, resetting the view or downloading

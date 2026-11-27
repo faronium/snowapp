@@ -64,10 +64,11 @@ def anomaly_colors(pct):
     return colors.tolist()
 
 
-def draw_station_map(stations, show_anomaly):
+def draw_station_map(stations, show_anomaly, selected=None):
     """
     stations: DataFrame indexed by station_id with name, latitude, longitude, pct_of_median and hover
-    (see datastore.build_snapshot). Clicking a marker reports the station_id as customdata[0].
+    (see datastore.build_snapshot); selected: the chosen station, highlighted in green. Clicking a marker
+    reports the station_id as customdata[0].
     """
     fig = go.Figure()
     fig.add_trace(go.Scattermap(
@@ -81,11 +82,15 @@ def draw_station_map(stations, show_anomaly):
             opacity=1.0,
             color=anomaly_colors(stations['pct_of_median']) if show_anomaly else PLAIN_COLOR,
         ),
+        # The chosen station (from the list or a click) is highlighted; the others keep their look.
+        selectedpoints=[i for i, sid in enumerate(stations.index) if sid == selected],
         selected=dict(marker={'size': 26, 'color': 'rgba(0,250,131,0.75)'}),
+        unselected=dict(marker={'opacity': 1.0}),
         showlegend=False,
     ))
     fig.update_layout(
-        clickmode='event+select',
+        clickmode='event',
+        uirevision='station-map',     # keep the user's zoom when the map is redrawn for another station
         map={
             'zoom': 3,
             'center': dict(lat=52.5, lon=-126),

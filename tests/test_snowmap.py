@@ -48,3 +48,11 @@ def test_draw_station_map_uses_the_configured_basemap(monkeypatch):
     fig = snowmap.draw_station_map(stations, show_anomaly=True)
     assert fig.layout.map.style['sources']['mapbox-outdoors']['tileSize'] == 512
     assert len(fig.data) == 1                      # no hidden colour-bar trace any more
+
+
+def test_draw_station_map_highlights_the_chosen_station():
+    stations = pd.DataFrame({'name': ['A', 'B'], 'latitude': [50.0, 51.0], 'longitude': [-120.0, -121.0],
+                             'pct_of_median': [80.0, 90.0], 'hover': ['A', 'B']}, index=['S1', 'S2'])
+    fig = snowmap.draw_station_map(stations, show_anomaly=False, selected='S2')
+    assert list(fig.data[0].selectedpoints) == [1] and fig.layout.uirevision == 'station-map'
+    assert list(snowmap.draw_station_map(stations, False, selected='S9').data[0].selectedpoints) == []   # filtered out
