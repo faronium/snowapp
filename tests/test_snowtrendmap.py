@@ -44,15 +44,18 @@ def test_key_puts_red_where_the_values_are():
     assert ticks.children[0].children.startswith('≥+10') and title.children == 'Snow-off date: days/decade'
 
 
-def test_view_zooms_to_the_selection():
-    assert tm.view_for([], [], 'bc') == tm.BC_VIEW
+def test_view_boxes_for_a_station_a_group_and_bc():
     station = tm.view_for([50.0], [-123.0], 'station')
     assert station['center'] == {'lat': 50.0, 'lon': -123.0}
-    assert 6.0 < station['zoom'] < 7.5                                       # about +/-100 km on a ~470 px map
+    (w, s), (e, n) = station['box']
+    assert (n - s) * 111 == pytest.approx(200)                              # +/-100 km north-south
+    assert (e - w) * 111 * math.cos(math.radians(50)) == pytest.approx(200)  # and east-west
     lone = tm.view_for([50.0], [-123.0], 'subbasin')                         # one-station group: +/-50 km minimum
-    assert lone['zoom'] > station['zoom']
-    wide = tm.view_for([49.0, 56.0], [-128.0, -118.0], 'region')
-    assert wide['zoom'] < station['zoom'] and wide['center'] == {'lat': 52.5, 'lon': -123.0}
+    assert lone['box'][1][1] - lone['box'][0][1] == pytest.approx(100 / 111)
+    bc = tm.view_for([49.0, 59.5], [-135.0, -115.0], 'bc')                  # all stations, with a margin
+    (w, s), (e, n) = bc['box']
+    assert w < -135 and e > -115 and s < 49 and n > 59.5
+    assert bc['zoom'] < station['zoom']
 
 
 def test_station_stats_in_percent_per_decade():
@@ -65,14 +68,34 @@ def test_station_stats_in_percent_per_decade():
     assert np.isnan(stats.loc['S2', 'value']) and stats.loc['S2', 'n'] == 0
 
 
-def test_draw_trend_map_halos_only_the_selected_station():
-    stations = pd.DataFrame({'name': ['A', 'B', 'C'], 'latitude': [50.0, 51.0, 52.0], 'longitude': [-123.0, -124.0, -125.0]},
-                            index=['S1', 'S2', 'S3'])
-    stats = pd.DataFrame({'value': [-5.0, 2.0, np.nan], 'p': [0.01, 0.5, np.nan], 'n': [20, 20, 4]}, index=stations.index)
-    view = tm.view_for([50.0, 51.0], [-123.0, -124.0], 'region')
-    fig = tm.draw_trend_map(stations, stats, 'snow_off_day', 'trend', 'S2', ['S1', 'S2'], view, 'region:x')
+def stations_and_stats():
+    stations = pd.DataFrame({'name': ['A', 'B', 'C', 'D'], 'latitude': [50.0, 51.0, 52.0, 53.0],
+                             'longitude': [-123.0, -124.0, -125.0, -126.0]}, index=['S1', 'S2', 'S3', 'S4'])
+    stats = pd.DataFrame({'value': [-5.0, 2.0, np.nan, -8.0], 'p': [0.01, 0.5, np.nan, 0.001], 'n': [20, 20, 4, 20]},
+                         index=stations.index)
+    return stations, stats
+
+
+def test_only_stations_in_the_analysis_are_coloured():
+    stations, stats = stations_and_stats()
+    view = tm.view_for([50.0, 51.0], [-123.0, -124.0], 'subbasin')
+    fig = tm.draw_trend_map(stations, stats, 'snow_off_day', 'trend', 'S2', ['S1', 'S2', 'S3'], view, 'subbasin:x')
     halo, ring, main = fig.data
-    assert list(halo.customdata[0])[0] == 'S2' and len(halo.customdata) == 1      # only the chosen station
-    assert [c[0] for c in ring.customdata] == ['S1']                               # only the significant one
-    assert list(main.marker.opacity)[2] < list(main.marker.opacity)[1]           # outside the group: lighter
-    assert fig.layout.uirevision == 'region:x' and fig.layout.map.zoom == pytest.approx(view['zoom'])
+    assert [c[0] for c in halo.customdata] == ['S2']                 # only the chosen station
+    assert [c[0] for c in ring.customdata] == ['S1']                 # S4 is significant but outside the selection
+    colors, opacity, size = list(main.marker.color), list(main.marker.opacity), list(main.marker.size)
+    assert colors[3] == tm.OUT_COLOR and opacity[3] < 1              # outside: light grey
+    assert colors[2] == tm.FEW_COLOR and opacity[2] == 1 and size[2] < size[0]   # too few seasons: small, opaque
+    assert colors[0] not in (tm.OUT_COLOR, tm.FEW_COLOR) and opacity[0] == 1
+    assert fig.layout.map.bounds.west is None                         # no bounding box to clamp the view
+    assert fig.layout.uirevision == 'subbasin:x'
+
+
+def test_fdr_counts_only_the_stations_in_the_analysis():
+    stations, stats = stations_and_stats()
+    stats['p'] = [0.04, 0.5, np.nan, 0.001]
+    # S1 alone at p = 0.04: tested plainly at p < 0.05 when it is the whole analysis.
+    one = tm.significant_stations(stats, np.array([True, False, False, False]), fdr=True)
+    assert list(one) == [True, False, False, False]
+    everyone = tm.significant_stations(stats, np.ones(4, dtype=bool), fdr=True)
+    assert everyone['S4'] and not everyone['S2']

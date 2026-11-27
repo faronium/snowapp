@@ -115,16 +115,20 @@ def analysis_desc_md(dcc):
         has no such direction and uses a single red scale, darker for higher values. Colours stop changing
         beyond 10 days per decade (15 for season length), 15% per decade, or a correlation of 0.6.
 
-        Stations ringed in black are significant (p < 0.05); the rest are faded, and small grey markers have
-        fewer than 10 seasons in the period. With around 100 stations, about 5 would pass p < 0.05 by chance
-        alone. Ticking *Map: control the false discovery rate across stations* applies the Benjamini-Hochberg
-        procedure instead, with the false discovery rate set to 10% as Wilks (2016) recommends for maps whose
-        stations are correlated with each other (this keeps the chance of a falsely significant map near 5%).
+        Only the stations in the current analysis are coloured: the chosen station on its own, its sub-basin
+        or region, or every station for *All of BC*. Stations outside the selection are light grey. Stations
+        ringed in black are significant (p < 0.05), and small dark grey markers have fewer than 10 seasons in
+        the period. With around 100 stations, about 5 would pass p < 0.05 by chance alone. Ticking *Map: control
+        the false discovery rate across stations* applies the Benjamini-Hochberg procedure to the stations in
+        the selection instead, with the false discovery rate set to 10% as Wilks (2016) recommends for maps
+        whose stations are correlated with each other (this keeps the chance of a falsely significant map near
+        5%). A single station is simply tested at p < 0.05.
 
-        The map zooms to the selection: about 100 km around a single station, the stations of a sub-basin or
-        region with some margin around them, or the whole province for *All of BC*. The station chosen on the
-        tab has a green halo, and stations outside the selected sub-basin or region are lightened. Clicking a station on either map selects it on the Trends
-        tab; with a sub-basin or region showing, that switches to the clicked station's group.
+        The map fits itself to the selection: about 100 km around a single station, the stations of a
+        sub-basin or region with some margin, or all of the stations for *All of BC*. The station chosen on the
+        tab has a green halo. Zooming or panning by hand is kept while the selection stays the same. Clicking a
+        station on either map selects it on the Trends tab; with a sub-basin or region showing, that switches
+        to the clicked station's group.
 
         #### Grouped Stations (Trends tab)
         A single station's record is often too short and too variable for a trend to stand out. The Trends tab

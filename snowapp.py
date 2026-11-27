@@ -280,6 +280,8 @@ def make_trends_tab(snap, default_station):
                   style={'height': '78vh'}),
         snowmap.color_key('trend-legend', shown=True),
         mapbox_wordmark(),
+        dcc.Store(id='trend-map-box'),
+        dcc.Store(id='trend-map-fitted'),
     ], className='map-wrapper')
     return dbc.Tab([
         dbc.Row([dbc.Col([controls], width=12, className='mt-3 mb-4')]),
@@ -393,7 +395,13 @@ snowapp.clientside_callback(
         setTimeout(function() {
             if (!window.Plotly) { return; }
             document.querySelectorAll('.js-plotly-plot').forEach(function(gd) {
-                if (gd.offsetParent !== null) { window.Plotly.Plots.resize(gd); }
+                if (gd.offsetParent !== null) {
+                    var resized = window.Plotly.Plots.resize(gd);
+                    // The Trends map can't be fitted while hidden: fit it now if that's still to do.
+                    if (gd.closest('#trend-map') && window.snowappFitTrendMap) {
+                        Promise.resolve(resized).then(function() { window.snowappFitTrendMap(); });
+                    }
+                }
             });
         }, 100);
         return window.dash_clientside.no_update;
@@ -401,6 +409,45 @@ snowapp.clientside_callback(
     Output('resize-trigger', 'data'),
     Input('tabs', 'active_tab'),
     Input('pageload-modal', 'is_open'),
+)
+
+# Fit the Trends map to the selection's box with MapLibre's fitBounds, which frames it for the map's real size
+# on any screen. Only when the selection changes, so a hand-set zoom survives changes of indicator or settings.
+snowapp.clientside_callback(
+    '''function(target) {
+        if (!target) { return window.dash_clientside.no_update; }
+        window.snowappTrendBox = target;
+        window.snowappFitTrendMap = function() {
+            var t = window.snowappTrendBox, tries = 0;
+            if (window.snowappFittedRevision === t.revision) { return; }
+            (function attempt() {
+                var gd = document.querySelector('#trend-map .js-plotly-plot');
+                var fl = gd && gd._fullLayout;
+                var map = fl && fl.map && fl.map._subplot && fl.map._subplot.map;
+                // Wait until the map is visible and plotly has applied the figure for this selection; otherwise
+                // plotly's own centre and zoom would overwrite the fit.
+                if (!map || !gd.offsetParent || fl.uirevision !== t.revision) {
+                    if (tries++ < 50) { setTimeout(attempt, 100); }
+                    return;
+                }
+                setTimeout(function() {
+                    map.resize();
+                    // Keep the stations clear of the colour key in the top-right corner.
+                    var key = document.getElementById('trend-legend');
+                    var right = key && key.offsetWidth ? key.offsetWidth + 24 : 12;
+                    // The originalEvent makes plotly record the fitted view as if the user had set it, so
+                    // later figure updates for the same selection (uirevision) keep it.
+                    map.fitBounds(t.box, {padding: {top: 12, bottom: 12, left: 12, right: right},
+                                          animate: false, maxZoom: 9}, {originalEvent: {type: 'fit'}});
+                    window.snowappFittedRevision = t.revision;
+                }, 150);
+            })();
+        };
+        window.snowappFitTrendMap();
+        return window.dash_clientside.no_update;
+    }''',
+    Output('trend-map-fitted', 'data'),
+    Input('trend-map-box', 'data'),
 )
 
 
@@ -507,6 +554,7 @@ def follow_map_click(main_click, trend_click):
     Output('trend-map', 'figure'),
     Output('trend-legend', 'children'),
     Output('trend-map-note', 'children'),
+    Output('trend-map-box', 'data'),
     Input('trend-station', 'value'),
     Input('trend-level', 'value'),
     Input('trend-view', 'value'),
@@ -522,7 +570,7 @@ def update_trend_map(sid, level, view, period, adjust, col, fdr):
     '''
     snap = datastore.current()
     if snap is None or sid is None:
-        return no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update
     stat = 'enso' if view == 'enso' else 'trend'
     start = snowgroups.TREND_START if period == '1990' else None
     stations = snap.stations
@@ -537,7 +585,9 @@ def update_trend_map(sid, level, view, period, adjust, col, fdr):
         revision = sid if level == 'station' else f'{level}:{snowgroups.group_key(sid, level)}'
     view = snowtrendmap.view_for(in_view['latitude'], in_view['longitude'], level)
     fig = snowtrendmap.draw_trend_map(stations, stats, col, stat, sid, members, view, revision, fdr=bool(fdr))
-    return fig, snowtrendmap.key(col, stat), snowtrendmap.key_note(bool(fdr))
+    # The browser fits the map to this box (see fit_trend_map), once per change of selection.
+    box = {'box': view['box'], 'revision': revision}
+    return fig, snowtrendmap.key(col, stat), snowtrendmap.key_note(bool(fdr)), box
 
 
 @snowapp.callback(

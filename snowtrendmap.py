@@ -26,13 +26,15 @@ TREND_RANGE = {'peak_swe': 15, 'peak_day': 10, 'snow_on_day': 10, 'snow_off_day'
 R_RANGE = 0.6                      # ... and beyond +/- this correlation
 SIGNIFICANT = 0.05
 FDR_Q = 0.10
-FEW_COLOR = 'rgb(185,185,185)'     # fewer than si.MIN_TREND_SEASONS seasons in the period
+OUT_COLOR = 'rgb(200,200,200)'     # stations that aren't part of the current analysis
+FEW_COLOR = 'rgb(105,105,105)'     # fewer than si.MIN_TREND_SEASONS seasons in the period (small, opaque)
 RING_COLOR = 'rgb(30,30,30)'       # ring around significant stations
-SELECT_COLOR = 'rgb(0,220,120)'    # halo around the selected station or group (as on the main map)
+SELECT_COLOR = 'rgb(0,220,120)'    # halo around the selected station (as on the main map)
 
-# Approximate size of the map in pixels, for choosing a zoom level that fits a selection.
-MAP_WIDTH_PX, MAP_HEIGHT_PX = 470, 560
-BC_VIEW = {'center': {'lat': 52.5, 'lon': -126.0}, 'zoom': 3.0}
+# The view is set in the browser by fitting the map to a box (MapLibre's fitBounds, see snowapp.py), so the
+# framing suits the map's real size. The centre and zoom estimated here, for a map of about this many pixels,
+# are only the starting point.
+MAP_WIDTH_PX, MAP_HEIGHT_PX = 510, 780
 STATION_HALF_KM = 100.0
 GROUP_MARGIN = 0.25
 GROUP_MIN_HALF_KM = 50.0
@@ -136,20 +138,22 @@ def _zoom_for(lat_min, lat_max, lon_min, lon_max):
 
 
 def view_for(lats, lons, level):
-    """Map centre and zoom: about +/-100 km around a station, a group's stations with a margin, or all of BC."""
+    """
+    The map's view for a selection: a box [[west, south], [east, north]] about +/-100 km around a station, or
+    around a group's stations (all stations for all of BC) with a margin, plus a centre and zoom estimated
+    from it.
+    """
     lats, lons = np.asarray(lats, dtype=float), np.asarray(lons, dtype=float)
-    if level == 'bc' or len(lats) == 0:
-        return dict(BC_VIEW)
-    lat0 = float((lats.min() + lats.max()) / 2)
+    lat0, lon0 = float((lats.min() + lats.max()) / 2), float((lons.min() + lons.max()) / 2)
     km_lat, km_lon = 111.0, 111.0 * math.cos(math.radians(lat0))
     if level == 'station':
         half_lat, half_lon = STATION_HALF_KM / km_lat, STATION_HALF_KM / km_lon
     else:
         half_lat = max((lats.max() - lats.min()) / 2 * (1 + GROUP_MARGIN), GROUP_MIN_HALF_KM / km_lat)
         half_lon = max((lons.max() - lons.min()) / 2 * (1 + GROUP_MARGIN), GROUP_MIN_HALF_KM / km_lon)
-    lon0 = float((lons.min() + lons.max()) / 2)
+    box = [[lon0 - half_lon, lat0 - half_lat], [lon0 + half_lon, lat0 + half_lat]]
     zoom = _zoom_for(lat0 - half_lat, lat0 + half_lat, lon0 - half_lon, lon0 + half_lon)
-    return {'center': {'lat': lat0, 'lon': lon0}, 'zoom': zoom}
+    return {'center': {'lat': lat0, 'lon': lon0}, 'zoom': zoom, 'box': box}
 
 
 # ---------------------------------------------------------------- figure
@@ -158,7 +162,7 @@ def _fmt_p(p):
     return 'p < 0.001' if p < 0.001 else f'p = {p:.2g}'
 
 
-def _hover(name, sid, row, col, stat, significant):
+def _hover(name, sid, row, col, stat, significant, in_analysis=True):
     label = si.INDICATORS[col][0]
     head = f'<b>{name}</b> ({sid})<br>'
     if np.isnan(row['value']):
@@ -167,32 +171,43 @@ def _hover(name, sid, row, col, stat, significant):
         body = f'{label}: r = {row["value"]:+.2f} with RONI'
     else:
         body = f'{label}: {row["value"]:+.1f} {units(col, stat)}'
-    return head + body + f'<br>{_fmt_p(row["p"])}, {int(row["n"])} seasons' + (' (significant)' if significant else '')
+    note = ' (significant)' if significant else ('' if in_analysis else ' (outside the current selection)')
+    return head + body + f'<br>{_fmt_p(row["p"])}, {int(row["n"])} seasons' + note
 
 
-def significant_stations(stats, fdr=False):
+def significant_stations(stats, in_analysis, fdr=False):
+    """
+    Stations with a significant trend or correlation. With fdr, the false discovery rate is controlled across
+    the stations in the current analysis (a single station is simply tested at p < 0.05).
+    """
     p = stats['p'].to_numpy(dtype=float)
-    if fdr:
-        return pd.Series(si.fdr_significant(p, FDR_Q), index=stats.index)
-    return pd.Series(np.nan_to_num(p, nan=1.0) < SIGNIFICANT, index=stats.index)
+    plain = np.nan_to_num(p, nan=1.0) < SIGNIFICANT
+    if not fdr or in_analysis.sum() <= 1:
+        return pd.Series(plain & in_analysis, index=stats.index)
+    sig = np.zeros(len(p), dtype=bool)
+    sig[in_analysis] = si.fdr_significant(p[in_analysis], FDR_Q)
+    return pd.Series(sig, index=stats.index)
 
 
 def draw_trend_map(stations, stats, col, stat, selected, members, view, uirevision, fdr=False):
     """
     stations: DataFrame (index station_id) with name, latitude, longitude; stats: station_stats() for them;
-    selected: the station chosen on the tab (green halo); members: the stations of the selected group (the
-    rest are lightened), or None for all of BC; view: view_for().
-    Clicking a station reports its id as customdata[0].
+    selected: the station chosen on the tab (green halo); members: the stations in the current analysis (the
+    station itself, or its sub-basin or region), or None for all of BC; view: view_for().
+    Only stations in the analysis are coloured; the others are light grey. Clicking a station reports its id
+    as customdata[0].
     """
     stats = stats.reindex(stations.index)
-    sig = significant_stations(stats, fdr)
-    has_value = stats['value'].notna()
-    in_group = stations.index.isin(members) if members is not None else np.ones(len(stations), dtype=bool)
-    colors = value_colors(stats['value'], col, stat)
-    base = np.where(has_value, np.where(sig, 1.0, 0.55), 0.8)
-    opacity = np.where(in_group, base, base * 0.6)
+    in_analysis = stations.index.isin(members) if members is not None else np.ones(len(stations), dtype=bool)
+    has_value = stats['value'].notna().to_numpy()
+    sig = significant_stations(stats, in_analysis, fdr).to_numpy() & has_value
+    colors = np.array(value_colors(stats['value'], col, stat), dtype=object)
+    colors[~in_analysis & has_value] = OUT_COLOR
+    colors[~has_value] = FEW_COLOR
     size = np.where(has_value, 15, 8)
-    hover = [_hover(r['name'], sid, stats.loc[sid], col, stat, bool(sig[sid])) for sid, r in stations.iterrows()]
+    opacity = np.where(has_value & ~in_analysis, 0.75, 1.0)
+    hover = [_hover(r['name'], sid, stats.loc[sid], col, stat, bool(s), bool(a))
+             for (sid, r), s, a in zip(stations.iterrows(), sig, in_analysis)]
     custom = list(zip(stations.index, hover))
 
     fig = go.Figure()
@@ -206,16 +221,17 @@ def draw_trend_map(stations, stats, col, stat, selected, members, view, uirevisi
             ))
 
     halo(np.asarray(stations.index == selected), 23, SELECT_COLOR)      # the selected station, outermost
-    halo(np.asarray(sig & has_value), 19, RING_COLOR)                   # significance ring
+    halo(sig, 19, RING_COLOR)                                           # significance ring
     fig.add_trace(go.Scattermap(
         lon=stations['longitude'], lat=stations['latitude'], mode='markers',
-        marker=dict(size=list(size), color=colors, opacity=list(opacity)),
+        marker=dict(size=list(size), color=list(colors), opacity=list(opacity)),
         customdata=custom, hovertemplate='%{customdata[1]}<extra></extra>', showlegend=False,
     ))
+    # No map_bounds here: with a bounding box, MapLibre clamps the centre before plotly applies the new zoom,
+    # which sent a jump from the all-of-BC view to a station off to central BC.
     fig.update_layout(
         clickmode='event',
-        map={**view, 'style': snowmap.basemap_style()},
-        map_bounds={'west': -142, 'east': -110, 'south': 45, 'north': 61},
+        map={'center': view['center'], 'zoom': view['zoom'], 'style': snowmap.basemap_style()},
         margin=dict(l=0, r=0, b=0, t=0),
         hoverlabel=dict(bgcolor='white', font_size=14),
         uirevision=uirevision,
@@ -224,6 +240,7 @@ def draw_trend_map(stations, stats, col, stat, selected, members, view, uirevisi
 
 
 def key_note(fdr):
-    test = 'false discovery rate controlled at 10%, Benjamini-Hochberg' if fdr else 'p < 0.05'
-    return (f'Dark ring: significant ({test}). Faded: not significant. Small grey: fewer than '
-            f'{si.MIN_TREND_SEASONS} seasons in the period. Green halo: the selected station.')
+    test = 'false discovery rate controlled at 10% across the selection' if fdr else 'p < 0.05'
+    return (f'Colours: stations in the current selection. Dark ring: significant ({test}). Light grey: outside the '
+            f'selection. Small dark grey: fewer than {si.MIN_TREND_SEASONS} seasons in the period. Green halo: the '
+            'selected station.')
