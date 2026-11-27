@@ -1,9 +1,13 @@
 """
 Snow season indicators for the Trends tab, and the trend and correlation statistics shown with them.
 
-For each station and each complete season (snowdata.complete_seasons), from the daily SWE series:
+For each station and each past season with data (snowdata.indicator_seasons), from the daily SWE series, each
+indicator where its own data checks pass (seasons needn't be complete):
 
-  peak SWE, peak date      the highest 5-day running mean of SWE, taken as measured
+  peak SWE, peak date      the highest 5-day running mean of SWE, taken as measured (and at least SNOW_MM
+                           above bare ground: a season without a snowpack has no indicators); needs data on
+                           PEAK_WINDOW_COVERAGE of the days from 1 January to 1 June, so that a peak can't
+                           hide in a gap
   snow-on, snow-off        the first day of, and the first day after, the longest continuous stretch with
                            SWE at least SNOW_MM above bare ground. The search starts on 1 September so that
                            snow arriving in September at high stations is dated correctly.
@@ -53,6 +57,7 @@ SMOOTH_DAYS = 5            # running mean for the peak and the 5-day melt rate
 SHORT_MELT_DAYS = 3        # running mean for the 3-day melt rate
 PEAK_COVERAGE = 0.8        # share of days with data needed within PEAK_HALF_WINDOW days of the peak
 PEAK_HALF_WINDOW = 15
+PEAK_WINDOW_COVERAGE = 0.9 # share of days with data needed from 1 January to 1 June (when peaks happen)
 MELT_COVERAGE = 0.8        # share of days with data needed between the peak and snow-off
 ABRUPT_MAX_DAYS = 7        # an abrupt snow-off is kept (as probably early) if the snow left would melt this fast
 MIN_TREND_SEASONS = 10     # trends and correlations are shown only with at least this many seasons
@@ -137,7 +142,8 @@ def station_indicators(series, seasons, flags=None, drop_mm=np.nan):
     }
     pos = lambda year, month, day: (pd.Timestamp(year, month, day) - start).days
     rows = {int(wy): _season(arrays, pos, int(wy), drop_mm) for wy in seasons}
-    return pd.DataFrame.from_dict(rows, orient='index', columns=COLUMNS).sort_index()
+    table = pd.DataFrame.from_dict(rows, orient='index', columns=COLUMNS).sort_index()
+    return table[table[list(INDICATORS)].notna().any(axis=1)]          # seasons with at least one indicator
 
 
 def _season(arrays, pos, wy, drop_mm=np.nan):
@@ -155,7 +161,9 @@ def _season(arrays, pos, wy, drop_mm=np.nan):
     ip = int(np.nanargmax(np.where(in_wy, sm, np.nan)))
     peak = float(sm[ip])
     lo, hi = max(0, ip - PEAK_HALF_WINDOW), min(len(x), ip + PEAK_HALF_WINDOW + 1)
-    peak_ok = np.mean(~np.isnan(x[lo:hi])) >= PEAK_COVERAGE
+    jan, jun = pos(wy, 1, 1) - a, pos(wy, 6, 1) - a + 1
+    peak_ok = (np.mean(~np.isnan(x[lo:hi])) >= PEAK_COVERAGE
+               and np.mean(~np.isnan(x[jan:jun])) >= PEAK_WINDOW_COVERAGE)
     if peak_ok:
         out['peak_swe'], out['peak_day'] = peak, wday[ip]
 
@@ -167,6 +175,9 @@ def _season(arrays, pos, wy, drop_mm=np.nan):
     if max(ref_on, ref_off) >= OFFSET_NOTE_MM:
         out['offset_mm'] = max(ref_on, ref_off)
     on_ok, off_ok = _plausible_bare(ref_on, peak), _plausible_bare(ref_off, peak)
+    if peak < min(ref_on, ref_off) + SNOW_MM:                 # no snowpack to speak of (or a dead sensor)
+        out['peak_swe'] = out['peak_day'] = np.nan
+        return out
 
     # Snow on the ground: at least SNOW_MM above bare ground (the snow-on level up to the peak, the snow-off
     # level after it). A gap in the data counts as snow only if there is snow on both sides of it.

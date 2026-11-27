@@ -65,18 +65,14 @@ def station_stats(indicators, station_ids, col, enso, start=None, stat='trend', 
             r = si.enso_relationship(pd.Series(enso).reindex(v.index).to_numpy(), v.to_numpy())
             rows[sid] = (r.get('r', np.nan), r.get('p', np.nan), r['n'])
             continue
-        raw = sg.station_adjusted(v, enso)[0] if adjust_enso else v
-        t = si.trend(raw.index, raw.to_numpy())             # p and n exactly as in the station's figure
+        if col in PERCENT:                                  # fitted on the log scale, as in the station's figure
+            v = np.log(v.where(v > 0)).dropna()
+        fit = sg.station_adjusted(v, enso)[0] if adjust_enso else v
+        t = si.trend(fit.index, fit.to_numpy())             # p and n exactly as in the station's figure
         if 'slope' not in t:
             rows[sid] = (np.nan, np.nan, t['n'])
             continue
-        value = t['slope_per_decade']
-        if col in PERCENT:
-            logv = np.log(v.where(v > 0)).dropna()
-            if adjust_enso:
-                logv = sg.station_adjusted(logv, enso)[0]
-            slope, _ = si.theil_sen(logv.index, logv.to_numpy())
-            value = 100 * (math.exp(10 * slope) - 1)
+        value = 100 * (math.exp(t['slope_per_decade']) - 1) if col in PERCENT else t['slope_per_decade']
         rows[sid] = (value, t['p'], t['n'])
     return pd.DataFrame.from_dict(rows, orient='index', columns=['value', 'p', 'n'])
 

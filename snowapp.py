@@ -660,7 +660,7 @@ def update_trend_graph(sid, level, view, period, fixed, adjust):
     if level == 'station':
         indicators = snowgroups.restrict_period(snap.indicators, [sid], start).get(sid, pd.DataFrame())
         title = f"{sid} {snap.stations['name'].get(sid, '')}"
-        span = snowdata.season_span(list(indicators.index)) if len(indicators) else 'no complete seasons'
+        span = snowdata.season_span(list(indicators.index)) if len(indicators) else 'no seasons'
         if view == 'enso':
             return indicator_vs_enso(indicators, snap.enso, title, subtitle=f'Indicators vs RONI, {when} ({span})')
         return indicator_timeseries(indicators, snap.enso, title, adjust_enso=adjust,

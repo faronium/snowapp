@@ -203,3 +203,29 @@ def test_melt_rates_skip_days_touching_held_values():
     marked = si.station_indicators(swe, [2019], flags=flags).loc[2019]
     assert plain.melt_rate_3d > 100                                             # the catch-up looks like melt
     assert marked.melt_rate_3d == pytest.approx(40, abs=1)
+
+
+def test_a_season_missing_spring_keeps_snow_on_but_not_its_peak():
+    days = pd.date_range('2018-09-01', '2019-09-30')
+    up = np.clip((days - pd.Timestamp('2018-11-01')).days * 5.0, 0, 900)
+    down = 900 - np.clip((days - pd.Timestamp('2019-04-15')).days, 0, None) * 30.0
+    swe = pd.Series(np.clip(np.where(days < pd.Timestamp('2019-04-15'), up, down), 0, None), index=days)
+    whole = si.station_indicators(swe, [2019]).loc[2019]
+    assert not np.isnan(whole.peak_swe) and not np.isnan(whole.snow_on_day)
+    gappy = swe.copy()
+    gappy[(days >= '2019-03-20') & (days < '2019-05-20')] = np.nan          # two spring months missing
+    r = si.station_indicators(gappy, [2019]).loc[2019]
+    assert np.isnan(r.peak_swe) and np.isnan(r.melt_rate)                   # the peak could be in the gap
+    assert r.snow_on_day == whole.snow_on_day                               # the start of the season was seen
+
+
+def test_seasons_without_any_indicator_are_left_out():
+    days = pd.date_range('2018-09-01', '2019-09-30')
+    swe = pd.Series(np.nan, index=days)
+    swe['2019-07-01':'2019-07-20'] = 0.0                                     # a few summer readings only
+    assert si.station_indicators(swe, [2019]).empty
+
+
+def test_a_season_reading_zero_all_winter_has_no_indicators():
+    days = pd.date_range('2001-09-01', '2002-09-30')
+    assert si.station_indicators(pd.Series(0.0, index=days), [2002]).empty

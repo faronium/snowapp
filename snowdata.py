@@ -75,6 +75,14 @@ def complete_seasons(matrix, exclude=()):
     return [int(wy) for wy in coverage.index[coverage >= COMPLETE_FRACTION] if wy not in exclude]
 
 
+def indicator_seasons(matrix, exclude=()):
+    """
+    Water years in a season_matrix with any data, for the snow season indicators. Unlike the medians and
+    ranges, these don't need complete seasons: each indicator has its own data checks (snowindicators).
+    """
+    return [int(wy) for wy in matrix.columns[matrix.notna().any()] if wy not in exclude]
+
+
 # ---------------------------------------------------------------- cleaning
 
 # Spikes: one or two readings far from the level on both sides of them, which then comes back.

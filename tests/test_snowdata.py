@@ -232,3 +232,8 @@ def test_latest_enso_orders_seasons_within_a_year():
 def test_enso_start_range(value, expected):
     # The old version could never return the neutral range.
     assert sd.enso_start_range(value) == expected
+
+
+def test_indicator_seasons_are_every_past_season_with_data():
+    m = pd.DataFrame({2001: [1.0, np.nan], 2002: [np.nan, np.nan], 2003: [np.nan, 5.0], 2004: [2.0, 2.0]})
+    assert sd.indicator_seasons(m, exclude=[2004]) == [2001, 2003]

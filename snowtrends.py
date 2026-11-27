@@ -187,18 +187,25 @@ def _line(fig, row, col, xs, ys, p):
 def indicator_timeseries(indicators, enso, title, adjust_enso=False, subtitle=''):
     """Each indicator by water year, coloured by ENSO phase, with a Theil-Sen trend line when n >= 10."""
     if indicators.empty:
-        return _empty('No complete seasons for this station')
+        return _empty('No snow season indicators for this station')
     years = indicators.index.to_numpy()
     series, titles, trends = {}, [], []
     for col in PANELS:
+        # Peak SWE and melt rates are fitted on the log scale (as for groups and the map), so a trend is a
+        # steady percentage change and a fall from 75% to 50% of normal counts more than one from 150% to 125%.
+        is_log = col in sg.LOG_INDICATORS
         values = indicators[col]
+        fit = np.log(values.where(values > 0)) if is_log else values
         if adjust_enso:
-            values, _ = sg.station_adjusted(values, enso)
-        series[col] = values
-        t = si.trend(years, values)
+            fit, _ = sg.station_adjusted(fit, enso)
+        series[col] = np.exp(fit) if is_log else fit
+        t = si.trend(years, fit)
+        t['log'] = is_log
         trends.append(t)
         label = si.INDICATORS[col][0]
-        titles.append(f'{label}: {_slope_text(col, t["slope_per_decade"])}, {_fmt_p(t["p"])}' if 'slope' in t
+        slope = (f'{100 * (math.exp(t["slope_per_decade"]) - 1):+.1f}%/decade' if is_log
+                 else _slope_text(col, t['slope_per_decade'])) if 'slope' in t else ''
+        titles.append(f'{label}: {slope}, {_fmt_p(t["p"])}' if 'slope' in t
                       else f'{label}: too few seasons for a trend (n = {t["n"]})')
     fig = _grid(titles)
     for k, col in enumerate(PANELS):
@@ -211,8 +218,12 @@ def indicator_timeseries(indicators, enso, title, adjust_enso=False, subtitle=''
         _points(fig, row, c, years[ok], v[ok], years[ok], enso, hover)
         t = trends[k]
         if 'slope' in t:
-            xs = np.array([years[ok].min(), years[ok].max()])
-            _line(fig, row, c, xs, t['intercept'] + t['slope'] * xs, t['p'])
+            if t['log']:                                    # a steady percentage change: a gentle curve in mm
+                xs = np.linspace(years[ok].min(), years[ok].max(), 30)
+                _line(fig, row, c, xs, np.exp(t['intercept'] + t['slope'] * xs), t['p'])
+            else:
+                xs = np.array([years[ok].min(), years[ok].max()])
+                _line(fig, row, c, xs, t['intercept'] + t['slope'] * xs, t['p'])
         if si.INDICATORS[col][2]:
             _date_axis(fig, row, c)
         else:
@@ -224,7 +235,7 @@ def indicator_timeseries(indicators, enso, title, adjust_enso=False, subtitle=''
 def indicator_vs_enso(indicators, enso, title, subtitle=''):
     """Each indicator against the water year's RONI, with a least-squares line and correlation when n >= 10."""
     if indicators.empty:
-        return _empty('No complete seasons for this station')
+        return _empty('No snow season indicators for this station')
     years = indicators.index.to_numpy()
     x = np.array([enso.get(wy, np.nan) for wy in years], dtype=float)
     titles, rels = [], []
@@ -305,7 +316,7 @@ def _counts(analysis):
 def group_timeseries(analyses, enso, title, subtitle=''):
     """The regional series of each indicator by water year, with the Regional Kendall trend when n >= 10 years."""
     if all(a['series'].empty for a in analyses.values()):
-        return _empty('Not enough stations with complete seasons in this group')
+        return _empty('Not enough stations with snow season indicators in this group')
     adjusted = any(a['adjusted'] for a in analyses.values())
     titles = []
     for col in PANELS:
@@ -343,7 +354,7 @@ def group_timeseries(analyses, enso, title, subtitle=''):
 def group_vs_enso(analyses, enso, title, subtitle=''):
     """The regional series of each indicator against RONI, with a least-squares line and correlation."""
     if all(a['series'].empty for a in analyses.values()):
-        return _empty('Not enough stations with complete seasons in this group')
+        return _empty('Not enough stations with snow season indicators in this group')
     titles = []
     for col in PANELS:
         a, label = analyses[col], si.INDICATORS[col][0]

@@ -70,8 +70,10 @@ def build_snapshot(con):
                 for sid, m in matrices.items()}
     medians, info = snowdata.station_climatologies(matrices, complete)
     anomalies = snowdata.current_anomalies(swe, medians)
-    indicators = {sid: snowindicators.station_indicators(swe[sid], complete[sid], flags=flags[sid],
-                                                         drop_mm=drop_mm.get(sid, np.nan))
+    # Indicators for every past season with data: each has its own data checks, so seasons needn't be complete.
+    indicators = {sid: snowindicators.station_indicators(
+                      swe[sid], snowdata.indicator_seasons(matrices[sid], exclude=[current_wy, *flagged.get(sid, {})]),
+                      flags=flags[sid], drop_mm=drop_mm.get(sid, np.nan))
                   for sid in swe.columns}
 
     stations = snowdb.read_stations(con).set_index('station_id')

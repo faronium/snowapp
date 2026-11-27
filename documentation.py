@@ -32,11 +32,12 @@ def analysis_desc_md(dcc):
 
         #### Analysis
         ###### Complete Seasons
-        Medians, ranges and the snow season indicators are calculated only from *complete* seasons: past water
-        years with data on at least 95% of the days from 1 October to 1 July. The window ends on 1 July so that
+        Medians and ranges are calculated only from *complete* seasons: past water years with data on at least
+        95% of the days from 1 October to 1 July. The window ends on 1 July so that
         lower, warmer stations that melt out early still qualify. The current season is never included. The
         legend on the graph and the station details on the map give the number of complete seasons and the
-        years they span, which differ from station to station.
+        years they span, which differ from station to station. The snow season indicators don't need complete
+        seasons: each has its own data checks (see *Snow Season Indicators*).
         ###### Data Cleaning
         Snow pillows sometimes report one or two readings far from those around them, such as a midwinter drop
         to zero or a jump of several hundred millimetres, before returning to the earlier level. These spikes
@@ -119,7 +120,12 @@ def analysis_desc_md(dcc):
         support, and the current season has none until it is complete.
 
         #### Snow Season Indicators (Trends tab)
-        For each complete season at a station:
+        For each past season at a station, each indicator its data support. Seasons needn't be complete:
+        snow-on and snow-off need the change itself to be observed (a snow-free reading the day before snow-on
+        and the day after snow-off), so a gap can't hide or shift them; the peak needs data on at least 90% of
+        the days from 1 January to 1 June, so that it can't hide in a gap; and the melt rates need a valid peak
+        and a known end to the snowpack. This gives about 15-20% more values than complete seasons alone, many
+        from recent seasons at stations that start reporting after 1 October.
 
         * **Peak SWE** and **peak date**: the highest 5-day running mean of snow water equivalent, as measured.
         * **Snow-on** and **snow-off dates**: the first day of, and the first day after, the longest continuous
@@ -152,7 +158,10 @@ def analysis_desc_md(dcc):
         left out of the plots when that is missing.
 
         *Statistics.* A trend is the Theil-Sen slope (the median of the slopes between every pair of seasons),
-        given per decade, with the two-sided Mann-Kendall test for its significance. The relationship with ENSO
+        given per decade, with the two-sided Mann-Kendall test for its significance. Peak snow water equivalent
+        and the melt rates are fitted on a logarithmic scale and given in percent per decade, so that a trend is
+        a steady proportional change: a fall from 75% to 50% of normal counts for more than one from 150% to
+        125%. The Mann-Kendall test uses only the order of the values, so the scale doesn't change its p-value. The relationship with ENSO
         is a least-squares line against each water year's RONI value, with the Pearson correlation and an
         approximate two-sided p-value. Both are shown only for indicators with at least 10 seasons, and lines
         are solid when p < 0.05. Points are coloured by the water year's ENSO phase (RONI of +0.5 or more is

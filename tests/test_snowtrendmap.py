@@ -99,3 +99,18 @@ def test_fdr_counts_only_the_stations_in_the_analysis():
     assert list(one) == [True, False, False, False]
     everyone = tm.significant_stations(stats, np.ones(4, dtype=bool), fdr=True)
     assert everyone['S4'] and not everyone['S2']
+
+
+def test_station_trends_for_peak_swe_are_in_percent_and_match_the_figure():
+    import snowtrends
+    years = np.arange(1995, 2020)
+    rng = np.random.default_rng(3)
+    swe = pd.Series(1000 * 0.97 ** (years - 1995) * np.exp(rng.normal(0, 0.15, len(years))), index=years)
+    ind = pd.DataFrame({c: swe for c in si.COLUMNS})
+    enso = pd.Series(rng.normal(0, 1, len(years)), index=years)
+    fig = snowtrends.indicator_timeseries(ind, enso, 'S1')
+    title = fig.layout.annotations[0].text
+    assert title.startswith('Peak SWE: -') and '%/decade' in title
+    stats = tm.station_stats({'S1': ind}, ['S1'], 'peak_swe', enso)
+    assert f"{stats.loc['S1', 'value']:+.1f}%/decade" in title             # the map and the figure agree
+    assert stats.loc['S1', 'p'] == pytest.approx(si.mann_kendall(years, swe.to_numpy()))   # p doesn't depend on the scale
