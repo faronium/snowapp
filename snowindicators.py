@@ -8,8 +8,18 @@ For each station and each complete season (snowdata.complete_seasons), from the 
                            SWE at least SNOW_MM above bare ground. The search starts on 1 September so that
                            snow arriving in September at high stations is dated correctly.
   season length            days from snow-on to snow-off
-  peak melt rates, dates   the largest 5-day and 3-day mean daily losses of SWE between the peak and
-                           snow-off (the 3-day rate is closer to what matters for runoff, but noisier)
+  peak melt rates, dates   the largest 5-day and 3-day mean daily losses of SWE between the peak and the
+                           last day with snow (the 3-day rate is closer to what matters for runoff, but
+                           noisier), from whole windows only. The drop into the snow-off day is never part of
+                           it: that day's loss is capped by whatever snow is left, and some records are cut to
+                           zero there. Days around a held week (snowdata.clean) are skipped. Melt rates need a
+                           known end to the snowpack: a snow-off date, or snow lasting to 30 September.
+
+Abrupt snow-off. When the drop into the snow-off day is larger than the station's abrupt-drop size (its 99th
+percentile daily loss during melt, from snowdata.clean), the snow probably didn't all melt that day. If the
+snow left before the drop would have taken up to ABRUPT_MAX_DAYS to melt at the pace of the week before, the
+date is kept and noted as probably early (snow_off_early); otherwise it, and the season length and melt rates,
+are left blank.
 
 Bare ground. Some sensors read a steady non-zero value when there is no snow (an offset, often after
 recalibration). A season's bare-ground level for snow-on is the lowest flat level (7-day standard deviation
@@ -31,6 +41,8 @@ import math
 import numpy as np
 import pandas as pd
 
+from snowdata import FILLED, HELD
+
 FLAT_WINDOW = 7            # days, for finding flat (snow-free) stretches
 FLAT_STD_MM = 2.0          # a stretch is flat if its standard deviation is below this
 SNOW_MM = 10.0             # snow on the ground: at least this much above bare ground
@@ -42,6 +54,7 @@ SHORT_MELT_DAYS = 3        # running mean for the 3-day melt rate
 PEAK_COVERAGE = 0.8        # share of days with data needed within PEAK_HALF_WINDOW days of the peak
 PEAK_HALF_WINDOW = 15
 MELT_COVERAGE = 0.8        # share of days with data needed between the peak and snow-off
+ABRUPT_MAX_DAYS = 7        # an abrupt snow-off is kept (as probably early) if the snow left would melt this fast
 MIN_TREND_SEASONS = 10     # trends and correlations are shown only with at least this many seasons
 
 INDICATORS = {   # column: (label, units, is a date)
@@ -53,8 +66,8 @@ INDICATORS = {   # column: (label, units, is a date)
     'melt_rate': ('Peak 5-day melt rate', 'mm/day', False),
     'melt_rate_3d': ('Peak 3-day melt rate', 'mm/day', False),
 }
-COLUMNS = list(INDICATORS) + ['melt_day', 'melt_day_3d', 'offset_mm']
-MELT_RATES = [('melt_rate', 'melt_day', 'loss'), ('melt_rate_3d', 'melt_day_3d', 'loss3')]   # column, date, array
+COLUMNS = list(INDICATORS) + ['melt_day', 'melt_day_3d', 'offset_mm', 'snow_off_early']
+MELT_RATES = [('melt_rate', 'melt_day', SMOOTH_DAYS), ('melt_rate_3d', 'melt_day_3d', SHORT_MELT_DAYS)]
 
 
 # ---------------------------------------------------------------- dates
@@ -94,12 +107,12 @@ def _plausible_bare(level, peak):
     return level < MAX_BARE_MM and not (level >= OFFSET_NOTE_MM and level >= MAX_BARE_FRACTION * peak)
 
 
-def station_indicators(series, seasons, filled=None):
+def station_indicators(series, seasons, flags=None, drop_mm=np.nan):
     """
     Indicators for one station: series is its daily SWE (DatetimeIndex), seasons the water years to compute
-    (normally its complete seasons), filled an optional boolean Series marking days filled in by the app
-    (snowdata.clean), which are not used for bare-ground levels. Returns a DataFrame indexed by water year
-    with COLUMNS.
+    (normally its complete seasons). From snowdata.clean, optionally: flags, the station's daily flags (filled
+    days are not used for bare-ground levels, and days touching held values not for melt rates), and drop_mm,
+    its abrupt-drop size. Returns a DataFrame indexed by water year with COLUMNS.
     """
     s = series.dropna()
     if s.empty or not len(seasons):
@@ -108,23 +121,26 @@ def station_indicators(series, seasons, filled=None):
     start = pd.Timestamp(min(seasons) - 2, 7, 1)
     days = pd.date_range(start, pd.Timestamp(max(seasons), 9, 30))
     s = series.reindex(days)
+    f = None if flags is None else flags.reindex(days)
+    filled = np.zeros(len(days), dtype=bool) if f is None else (f == FILLED).to_numpy()
+    held = np.zeros(len(days), dtype=bool) if f is None else (f == HELD).to_numpy()
     # Bare-ground levels come from readings only: a few filled days must not make a flat stretch.
-    readings = s if filled is None else s.where(~filled.reindex(days, fill_value=False).astype(bool))
-    roll = readings.rolling(FLAT_WINDOW, min_periods=FLAT_WINDOW - 1)
+    roll = s.where(~filled).rolling(FLAT_WINDOW, min_periods=FLAT_WINDOW - 1)
+    loss = (-s.diff()).to_numpy(dtype=float)
     arrays = {
         'x': s.to_numpy(dtype=float),
         'flat': roll.median().where(roll.std() < FLAT_STD_MM).to_numpy(dtype=float),
         'smooth': s.rolling(SMOOTH_DAYS, center=True, min_periods=3).mean().to_numpy(dtype=float),
-        'loss': (-s.diff()).rolling(SMOOTH_DAYS, center=True, min_periods=3).mean().to_numpy(dtype=float),
-        'loss3': (-s.diff()).rolling(SHORT_MELT_DAYS, center=True,
-                                      min_periods=SHORT_MELT_DAYS).mean().to_numpy(dtype=float),
+        'loss': loss,
+        # Melt rates leave out each day whose change starts or ends on a held value.
+        'melt_loss': np.where(held | np.r_[False, held[:-1]], np.nan, loss),
     }
     pos = lambda year, month, day: (pd.Timestamp(year, month, day) - start).days
-    rows = {int(wy): _season(arrays, pos, int(wy)) for wy in seasons}
+    rows = {int(wy): _season(arrays, pos, int(wy), drop_mm) for wy in seasons}
     return pd.DataFrame.from_dict(rows, orient='index', columns=COLUMNS).sort_index()
 
 
-def _season(arrays, pos, wy):
+def _season(arrays, pos, wy, drop_mm=np.nan):
     out = dict.fromkeys(COLUMNS, np.nan)
     a, b = pos(wy - 1, 9, 1), pos(wy, 9, 30) + 1           # search window: 1 Sep to 30 Sep of the water year
     x, sm = arrays['x'][a:b], arrays['smooth'][a:b]
@@ -165,23 +181,31 @@ def _season(arrays, pos, wy):
     # Snow-on needs an observed snow-free day just before it (not a data gap, not the start of the search).
     if on_ok and first > 0 and not np.isnan(x[first - 1]):
         out['snow_on_day'] = wday[first]
-    # Snow-off needs an observed snow-free day after the snowpack (not a gap, and not still snow on 30 Sep).
+    # Snow-off needs an observed snow-free day after the snowpack (not a gap, and not still snow on 30 Sep),
+    # and, if the snow ran out with an abrupt drop, not too much snow left before it.
+    end_known = last == len(x) - 1                         # snow to 30 Sep: the melt period is complete
     if off_ok and last + 1 < len(x) and not np.isnan(x[last + 1]):
-        out['snow_off_day'] = wday[last + 1]
+        drop = x[last] - x[last + 1]
+        if np.isfinite(drop_mm) and drop > drop_mm:
+            pace = np.nanmedian(arrays['loss'][a:b][max(last - 6, 0):last + 1])   # the week up to the drop
+            days_left = x[last] / max(pace, 1.0) if not np.isnan(pace) else np.inf
+            if days_left <= ABRUPT_MAX_DAYS:
+                out['snow_off_day'], out['snow_off_early'], end_known = wday[last + 1], 1.0, True
+        else:
+            out['snow_off_day'], end_known = wday[last + 1], True
     if not np.isnan(out['snow_on_day']) and not np.isnan(out['snow_off_day']):
         out['season_days'] = out['snow_off_day'] - out['snow_on_day']
 
-    # Peak melt rates: largest 5-day and 3-day mean daily losses between the peak and snow-off (or 30 Sep if
-    # the snow lasted all summer), with enough data in between.
-    if peak_ok and off_ok:
-        stop = last + 1 if not np.isnan(out['snow_off_day']) else len(x) - 1
-        if stop > ip and np.mean(~np.isnan(x[ip:stop + 1])) >= MELT_COVERAGE:
-            for col, day_col, key in MELT_RATES:
-                seg = arrays[key][a:b][ip + 1:stop + 1]
-                if np.any(~np.isnan(seg)):
-                    k = int(np.nanargmax(seg))
-                    if seg[k] > 0:
-                        out[col], out[day_col] = float(seg[k]), wday[ip + 1 + k]
+    # Peak melt rates: largest 5-day and 3-day mean daily losses from the day after the peak to the last day
+    # with snow, from whole windows only, with enough data in between.
+    if peak_ok and off_ok and end_known and last > ip and np.mean(~np.isnan(x[ip:last + 1])) >= MELT_COVERAGE:
+        seg = pd.Series(arrays['melt_loss'][a:b][ip + 1:last + 1])
+        for col, day_col, window in MELT_RATES:
+            mean = seg.rolling(window, center=True, min_periods=window).mean().to_numpy()
+            if np.any(~np.isnan(mean)):
+                k = int(np.nanargmax(mean))
+                if mean[k] > 0:
+                    out[col], out[day_col] = float(mean[k]), wday[ip + 1 + k]
     return out
 
 

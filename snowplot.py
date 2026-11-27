@@ -87,6 +87,8 @@ def season_markers(season, row, wy, color, flags=None, **kwargs):
         k = max(int(day), 0)
         x.append(season.index[k]); y.append(season.iloc[k]); symbols.append(symbol)
         note = ' (before 1 Oct)' if day < 0 else ''
+        if col == 'snow_off_day' and row.get('snow_off_early') == 1:
+            note += '<br>reached by an abrupt drop: probably a few days early'
         if flags is not None and day >= 0 and int(flags.iloc[k]) in ESTIMATE_NOTES:
             note += f'<br>on an {ESTIMATE_NOTES[int(flags.iloc[k])]}'
         if col == 'melt_day' and together:

@@ -17,6 +17,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
+import numpy as np
 import pandas as pd
 
 import ingest
@@ -55,9 +56,9 @@ class Snapshot:
 def build_snapshot(con):
     """Read the database and derive everything the callbacks need."""
     version = snowdb.data_version(con)
-    swe, flags, counts = snowdata.clean(snowdb.read_swe(con))
-    log.info('cleaning: removed %(spikes)d spikes; %(straight)d straight-line and %(filled)d filled days '
-             'flagged as estimates', counts)
+    swe, flags, counts, drop_mm = snowdata.clean(snowdb.read_swe(con))
+    log.info('cleaning: removed %(spikes)d spikes; %(straight)d straight-line, %(filled)d filled and %(held)d '
+             'held days flagged as estimates', counts)
     current_wy = int(snowdata.water_year([swe.index.max()])[0])
     flagged = snowdata.read_flagged_seasons()
 
@@ -69,8 +70,8 @@ def build_snapshot(con):
                 for sid, m in matrices.items()}
     medians, info = snowdata.station_climatologies(matrices, complete)
     anomalies = snowdata.current_anomalies(swe, medians)
-    indicators = {sid: snowindicators.station_indicators(swe[sid], complete[sid],
-                                                         filled=flags[sid] == snowdata.FILLED)
+    indicators = {sid: snowindicators.station_indicators(swe[sid], complete[sid], flags=flags[sid],
+                                                         drop_mm=drop_mm.get(sid, np.nan))
                   for sid in swe.columns}
 
     stations = snowdb.read_stations(con).set_index('station_id')

@@ -92,10 +92,20 @@ STRAIGHT_RULES = [(10, 3.0), (30, 1.0)]
 # Gaps of up to this many days are filled with a straight line, as the archive itself does.
 MAX_FILL_DAYS = 14
 
+# Abrupt drops during melt: a one-day loss above this percentile of the station's daily losses between peak and
+# melt-out (and at least MIN_DROP_MM). Coming straight out of a week in which the record barely moved (median
+# daily change under HELD_MM), the drop is the record catching up, not melt: that week is flagged as held values.
+DROP_PERCENTILE = 99
+MIN_DROP_MM = 50.0
+HELD_DAYS = 7
+HELD_MM = 10.0
+MELT_END_MM = 10.0          # a melt period runs from the season's highest reading until SWE is this low
+
 # What each daily value is (the flags returned by clean()).
-MEASURED, STRAIGHT, FILLED = 0, 1, 2
+MEASURED, STRAIGHT, FILLED, HELD = 0, 1, 2, 3
 NO_DATA = -1
-ESTIMATE_NOTES = {STRAIGHT: 'estimate: a straight line in the archive', FILLED: 'estimate: a gap filled by this app'}
+ESTIMATE_NOTES = {STRAIGHT: 'estimate: a straight line in the archive', FILLED: 'estimate: a gap filled by this app',
+                  HELD: 'estimate: the record barely moved before a sudden drop'}
 
 # Seasons left out of all statistics after review (sensor faults no rule can tell from real weather).
 FLAGGED_SEASONS_PATH = Path(__file__).with_name('flagged_seasons.csv')
@@ -142,6 +152,51 @@ def _fill(x):
     return out, fill
 
 
+def _melt_periods(x, starts):
+    """
+    Days in melt periods (from each water year's highest reading, if at least MIN_DROP_MM, until SWE first
+    falls to MELT_END_MM) as a mask, and the daily losses on those days apart from the day the snow runs out.
+    starts: index positions where each water year begins, followed by the end of x.
+    """
+    loss = np.r_[np.nan, -np.diff(x)]
+    mask = np.zeros(len(x), dtype=bool)
+    losses = []
+    for a, b in zip(starts[:-1], starts[1:]):
+        seg = x[a:b]
+        if np.all(np.isnan(seg)) or np.nanmax(seg) < MIN_DROP_MM:
+            continue
+        ip = a + int(np.nanargmax(seg))
+        low = np.where(x[ip:b] <= MELT_END_MM)[0]
+        end = ip + int(low[0]) if len(low) else b - 1
+        mask[ip + 1:end + 1] = True
+        losses.append(loss[ip + 1:end])
+    losses = np.concatenate(losses) if losses else np.array([])
+    return mask, losses[~np.isnan(losses)]
+
+
+def drop_threshold(losses):
+    """The size of an abrupt one-day drop for a station, from its daily losses during melt (NaN if too few)."""
+    if len(losses) < 30:
+        return np.nan
+    return max(float(np.percentile(losses, DROP_PERCENTILE)), MIN_DROP_MM)
+
+
+def _held(x, melt, threshold):
+    """Mask of held weeks: the HELD_DAYS days before an abrupt drop during melt, if the record barely moved."""
+    held = np.zeros(len(x), dtype=bool)
+    if np.isnan(threshold):
+        return held
+    change = np.r_[np.nan, np.diff(x)]
+    for t in np.where(melt & (-change > threshold))[0]:
+        if t < HELD_DAYS + 1:
+            continue
+        week = np.abs(change[t - HELD_DAYS + 1:t])           # the changes between the week's readings
+        week = week[~np.isnan(week)]
+        if len(week) >= HELD_DAYS - 3 and np.median(week) <= HELD_MM:
+            held[t - HELD_DAYS:t] = True
+    return held
+
+
 def clean(swe):
     """
     Clean the daily SWE (wide: date x station), station by station:
@@ -154,32 +209,42 @@ def clean(swe):
     2. Flag straight-line stretches in the archive as estimates (kept, not removed).
     3. Fill gaps of up to MAX_FILL_DAYS days with a straight line, flagged as estimates. The latest reading
        is never extended forward.
+    4. Flag the held week before an abrupt drop during melt (see DROP_PERCENTILE) as estimates.
 
-    Returns (swe on continuous days, flags of the same shape with MEASURED, STRAIGHT, FILLED or NO_DATA as
-    int8, counts {'spikes', 'straight', 'filled'}).
+    Returns (swe on continuous days, flags of the same shape with MEASURED, STRAIGHT, FILLED, HELD or NO_DATA
+    as int8, counts {'spikes', 'straight', 'filled', 'held'}, and each station's abrupt-drop size in mm as a
+    Series, which snowindicators uses for snow-off dates).
     """
+    counts = {'spikes': 0, 'straight': 0, 'filled': 0, 'held': 0}
     if swe.empty:
-        return swe.copy(), pd.DataFrame(index=swe.index, columns=swe.columns, dtype='int8'), \
-            {'spikes': 0, 'straight': 0, 'filled': 0}
+        empty_flags = pd.DataFrame(index=swe.index, columns=swe.columns, dtype='int8')
+        return swe.copy(), empty_flags, counts, pd.Series(dtype=float)
     days = pd.date_range(swe.index.min(), swe.index.max())
     daily = swe.reindex(days)                   # continuous days, so the windows are calendar days
     flags = np.full(daily.shape, NO_DATA, dtype=np.int8)
-    counts = {'spikes': 0, 'straight': 0, 'filled': 0}
+    _, starts = np.unique(water_year(days).to_numpy(), return_index=True)
+    starts = np.r_[starts, len(days)]
+    drops = {}
     for k, sid in enumerate(daily.columns):
         x = daily[sid].to_numpy(dtype=float).copy()
         spike = _spikes(x)
         x[spike] = np.nan
         straight = _straight(x)
         x, filled = _fill(x)
+        melt, losses = _melt_periods(x, starts)
+        drops[sid] = drop_threshold(losses)
         f = np.where(np.isnan(x), NO_DATA, MEASURED).astype(np.int8)
         f[straight] = STRAIGHT
         f[filled] = FILLED
+        held = _held(x, melt, drops[sid]) & (f == MEASURED)
+        f[held] = HELD
         daily[sid] = x
         flags[:, k] = f
         counts['spikes'] += int(spike.sum())
         counts['straight'] += int(straight.sum())
         counts['filled'] += int(filled.sum())
-    return daily, pd.DataFrame(flags, index=days, columns=daily.columns), counts
+        counts['held'] += int(held.sum())
+    return daily, pd.DataFrame(flags, index=days, columns=daily.columns), counts, pd.Series(drops, dtype=float)
 
 
 def flag_matrix(flags):

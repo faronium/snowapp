@@ -58,8 +58,16 @@ def analysis_desc_md(dcc):
         one season changes the set of seasons behind that day's median and range, and the range jumps, most
         visibly at stations with only a few seasons. A season still needs 95% of its days to be readings, not
         filled values, to count as complete, and bare-ground levels for the snow-on and snow-off dates come from
-        readings only. On the plot, estimated stretches of a season are shaded and say so on hover, as do the
-        markers of dates that fall on them.
+        readings only.
+
+        Some records also stop moving for a week during melt and then drop all at once, as if a reading was
+        held until the record caught up. When a one-day loss during melt is larger than 99% of the station's
+        daily losses between peak and melt-out (and at least 50 mm), and the record barely moved in the week
+        before it (a median daily change of 10 mm or less), that week is flagged as held values and the drop
+        is not counted as melt. About 90 such weeks are found, at around 40 stations.
+
+        On the plot, estimated stretches of a season (straight lines, filled gaps and held weeks) are shaded and
+        say so on hover, as do the markers of dates that fall on them.
 
         Some seasons have longer sensor faults that no simple rule can tell apart from real local weather.
         These are found by comparing each station's seasons with those of stations nearby and are flagged after
@@ -117,14 +125,21 @@ def analysis_desc_md(dcc):
         * **Snow-on** and **snow-off dates**: the first day of, and the first day after, the longest continuous
           period with snow water equivalent at least 10 mm above bare ground. The search starts on 1 September,
           because snow arrives before 1 October at some high stations. Short gaps in the data count as snow
-          when there is snow on both sides.
+          when there is snow on both sides. When the snow runs out with an abrupt drop (larger than 99% of the
+          station's daily losses during melt), the snow probably didn't all melt that day: some records are cut
+          to zero at the end of the season. If the snow left before the drop would have melted within a week at
+          the pace of the week before, the date is kept but marked as probably a few days early; otherwise the
+          snow-off date, season length and melt rates are left blank.
         * **Season length**: the days from snow-on to snow-off.
         * **Peak 5-day and 3-day melt rates**: the largest 5-day and 3-day mean daily losses of snow water
-          equivalent between the peak and snow-off. The 3-day rate is closer to the bursts of melt that drive
-          runoff, but noisier. It runs about 8% higher than the 5-day rate in a typical season, within 20% in
-          nine seasons out of ten, and the two pick different weeks about one season in ten. A sudden drop
-          that is not melt, such as a sensor fault or snow sliding off the pillow, inflates both, the 3-day
-          rate more: a 300 mm one-day drop reads as 100 mm/day over 3 days and 60 over 5.
+          equivalent from the day after the peak to the last day with snow, using whole windows only. The drop
+          into the snow-off day is never included: that day's loss is limited by whatever snow is left, and it
+          is where records cut to zero show up. Drops out of held weeks (see *Data Cleaning*) are left out too,
+          and a melt rate needs a known end to the snowpack. The 3-day rate is closer to the bursts of melt that
+          drive runoff, but noisier. It runs about 8% higher than the 5-day rate in a typical season, within 20%
+          in nine seasons out of ten, and the two pick different weeks about one season in ten. Melt does speed
+          up toward the end: aligned on snow-off, the daily loss in the 3 to 5 days before it is typically
+          about 1.8 times the season's average melt rate, in June as much as overall.
 
         *Bare ground.* Some snow pillows read a steady value above zero when there is no snow, usually after a
         recalibration. The bare-ground level is taken from flat stretches of the record (a 7-day standard

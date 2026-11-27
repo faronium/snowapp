@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import snowdata as sd
 import snowindicators as si
 
 WY = 2019   # water year 2019: 1 Oct 2018 to 30 Sep 2019 (not a leap year)
@@ -159,3 +160,46 @@ def test_a_short_burst_of_melt_shows_more_in_the_3_day_rate():
     r = si.station_indicators(swe, [2019]).loc[2019]
     assert r.melt_rate_3d == pytest.approx(80) and r.melt_rate == pytest.approx(56)   # 3 days at 80; 5 days avg 56
     assert abs(r.melt_day_3d - si.water_year_day([pd.Timestamp('2019-05-02')], 2019)[0]) <= 1
+
+
+def melt_out(final_left, pace=40.0):
+    """A season melting at `pace` mm a day until `final_left` mm remain, which then vanish in one day."""
+    days = pd.date_range('2018-09-01', '2019-09-30')
+    up = np.clip((days - pd.Timestamp('2018-11-01')).days * 5.0, 0, 1000)
+    down = 1000 - np.clip((days - pd.Timestamp('2019-04-20')).days, 0, None) * pace
+    x = np.where(days < pd.Timestamp('2019-04-20'), up, down)
+    x = np.clip(x, 0, None) + (np.arange(len(x)) % 2)        # a little wobble
+    after_peak = days >= pd.Timestamp('2019-04-20')
+    cut = np.where(after_peak & (x <= final_left))[0][0]     # first melt day at or below final_left
+    x[cut + 1:] = 0.0                                        # the rest vanishes the next day
+    return pd.Series(x, index=days), days[cut + 1]
+
+
+def test_an_abrupt_snow_off_with_little_snow_left_is_kept_but_noted():
+    swe, off = melt_out(final_left=120)                     # 120 mm left at 40 mm a day: 3 days early
+    r = si.station_indicators(swe, [2019], drop_mm=60.0).loc[2019]
+    assert r.snow_off_day == si.water_year_day([off], 2019)[0] and r.snow_off_early == 1
+    assert r.melt_rate == pytest.approx(40, abs=1) and r.melt_rate_3d == pytest.approx(40, abs=1)   # not the drop
+
+
+def test_an_abrupt_snow_off_with_much_snow_left_is_blank():
+    swe, off = melt_out(final_left=400)                     # 400 mm left: about 10 days of melt
+    r = si.station_indicators(swe, [2019], drop_mm=60.0).loc[2019]
+    assert np.isnan(r.snow_off_day) and np.isnan(r.season_days) and np.isnan(r.melt_rate) and np.isnan(r.melt_rate_3d)
+
+
+def test_a_gradual_snow_off_is_not_noted():
+    swe, off = melt_out(final_left=45)                      # the last ~40 mm go in a day: an ordinary melt-out
+    r = si.station_indicators(swe, [2019], drop_mm=60.0).loc[2019]
+    assert r.snow_off_day == si.water_year_day([off], 2019)[0] and np.isnan(r.snow_off_early)
+
+
+def test_melt_rates_skip_days_touching_held_values():
+    swe, off = melt_out(final_left=30)
+    stuck = (swe.index >= '2019-05-01') & (swe.index < '2019-05-08')
+    swe = swe.copy(); swe[stuck] = swe[swe.index == '2019-05-01'].iloc[0]       # held for a week, then catches up
+    flags = pd.Series(np.where(stuck, sd.HELD, sd.MEASURED), index=swe.index, dtype='int8')
+    plain = si.station_indicators(swe, [2019]).loc[2019]
+    marked = si.station_indicators(swe, [2019], flags=flags).loc[2019]
+    assert plain.melt_rate_3d > 100                                             # the catch-up looks like melt
+    assert marked.melt_rate_3d == pytest.approx(40, abs=1)

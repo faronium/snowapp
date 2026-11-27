@@ -67,7 +67,7 @@ def spiky(values):
 
 
 def cleaned(values):
-    swe, flags, counts = sd.clean(spiky(values) if not isinstance(values, pd.DataFrame) else values)
+    swe, flags, counts, _ = sd.clean(spiky(values) if not isinstance(values, pd.DataFrame) else values)
     return swe['S'], flags['S'], counts
 
 
@@ -126,9 +126,37 @@ def test_gaps_up_to_two_weeks_are_filled_with_a_straight_line():
 def test_clean_uses_calendar_days():
     swe = spiky([400.0] * 20).drop(pd.Timestamp('2004-01-05'))        # a day missing from the table
     swe.loc[pd.Timestamp('2004-01-12'), 'S'] = 0.0
-    out, flags, counts = sd.clean(swe)
+    out, flags, counts, _ = sd.clean(swe)
     assert len(out) == 20 and counts['spikes'] == 1 and counts['filled'] == 2
     assert flags.loc['2004-01-05', 'S'] == sd.FILLED and out.loc['2004-01-12', 'S'] == 400
+
+
+def melt_seasons(years=4, held_year=None):
+    """Seasons that build to 800 mm by 1 April and melt at a steady 20 mm a day, with one held week if asked."""
+    parts = []
+    for wy in range(2001, 2001 + years):
+        days = pd.date_range(f'{wy - 1}-10-01', f'{wy}-09-30')
+        up = np.clip((days - pd.Timestamp(f'{wy - 1}-11-01')).days * 5.0, 0, 800)
+        down = 800 - np.clip((days - pd.Timestamp(f'{wy}-04-01')).days, 0, None) * 20.0
+        x = np.clip(np.where(days < pd.Timestamp(f'{wy}-04-01'), up, down), 0, None)
+        x = x + (np.arange(len(x)) % 3)                     # a little wobble, so melt days differ
+        if wy == held_year:                                 # the record sticks for a week in mid-April, then catches up
+            k = days.get_loc(pd.Timestamp(f'{wy}-04-15'))
+            x[k:k + 8] = x[k]
+        parts.append(pd.Series(x, index=days))
+    return pd.DataFrame({'S': pd.concat(parts)})
+
+
+def test_held_week_before_an_abrupt_drop_is_flagged():
+    swe, flags, counts, drops = sd.clean(melt_seasons(held_year=2003))
+    held = flags['S'][flags['S'] == sd.HELD].index
+    assert len(held) == sd.HELD_DAYS and held[0] == pd.Timestamp('2003-04-16')
+    assert drops['S'] >= sd.MIN_DROP_MM and counts['held'] == sd.HELD_DAYS
+
+
+def test_steady_melt_has_no_held_weeks():
+    swe, flags, counts, drops = sd.clean(melt_seasons())
+    assert counts['held'] == 0 and drops['S'] == sd.MIN_DROP_MM      # 99th percentile of ~20 mm days, floored
 
 
 def test_flag_matrix():
