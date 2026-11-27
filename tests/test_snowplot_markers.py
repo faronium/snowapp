@@ -20,7 +20,7 @@ def test_markers_sit_on_the_line_at_each_date():
     assert list(tr.x) == [swe.index[31], swe.index[179], swe.index[200], swe.index[240]]
     assert list(tr.y) == [swe.iloc[31], swe.iloc[179], swe.iloc[200], swe.iloc[240]]
     assert list(tr.marker.symbol) == ['triangle-up', 'diamond', 'triangle-down', 'square']
-    assert '498 mm on 29 Mar' in tr.text[1] and '8.3 mm/day around 19 Apr' in tr.text[2]
+    assert '498 mm on 29 Mar' in tr.text[1] and '8.3 mm/day over 5 days around 19 Apr' in tr.text[2]
 
 
 def test_missing_and_out_of_range_dates():
@@ -65,3 +65,15 @@ def test_estimated_stretches_are_shaded_and_noted():
     assert 'straight line in the archive' in line.customdata[65] and line.customdata[10] == ''
     tr = snowplot.season_markers(swe, row, 2002, 'red', flags=flags)
     assert 'gap filled' in tr.text[2]                                   # fastest melt on day 200
+
+
+def test_the_3_day_melt_marker_only_when_it_falls_elsewhere():
+    swe, row = season_and_row()
+    near = row.copy(); near['melt_rate_3d'], near['melt_day_3d'] = 9.6, 201
+    tr = snowplot.season_markers(swe, near, 2002, 'red')
+    assert 'triangle-down-open' not in list(tr.marker.symbol)
+    assert '9.6 mm/day over 3 days around 20 Apr' in tr.text[2]           # both rates on the one marker
+    apart = row.copy(); apart['melt_rate_3d'], apart['melt_day_3d'] = 12.0, 215
+    tr = snowplot.season_markers(swe, apart, 2002, 'red')
+    assert list(tr.marker.symbol) == ['triangle-up', 'diamond', 'triangle-down', 'triangle-down-open', 'square']
+    assert '12.0 mm/day over 3 days' in tr.text[3]

@@ -31,7 +31,7 @@ import pandas as pd
 import snowindicators as si
 
 LEVELS = {'station': 'Station', 'subbasin': 'Sub-basin', 'region': 'Region', 'bc': 'All of BC'}
-LOG_INDICATORS = {'peak_swe', 'melt_rate'}
+LOG_INDICATORS = {'peak_swe', 'melt_rate', 'melt_rate_3d'}
 MIN_STATION_SEASONS = 5      # a station needs this many seasons of an indicator to be included in a group
 MIN_STATIONS_PER_YEAR = 2    # a year enters the regional series only with at least this many stations
 TREND_START = 1990           # default start of the trend period: the network is too sparse before this

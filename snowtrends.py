@@ -14,10 +14,11 @@ from plotly.subplots import make_subplots
 import snowgroups as sg
 import snowindicators as si
 
-PANELS = ['peak_swe', 'peak_day', 'snow_on_day', 'snow_off_day', 'season_days', 'melt_rate']
+PANELS = ['peak_swe', 'peak_day', 'snow_on_day', 'snow_off_day', 'season_days', 'melt_rate', 'melt_rate_3d']
 PHASE_COLORS = {'El Niño': 'rgb(255,110,95)', 'La Niña': 'rgb(0,175,245)', 'Neutral': 'rgb(128,128,128)',
                 'No RONI': 'rgb(200,200,200)'}
 STATION_DOT = 'rgba(90,90,90,0.28)'
+COUNTS_CELL = (4, 2)           # where the group views show the stations contributing each year
 SIGNIFICANT = 0.05
 PERCENT_TICKS = [25, 35, 50, 70, 100, 140, 200, 300]
 
@@ -93,12 +94,16 @@ def _empty(message):
 
 
 def _grid(titles, with_counts=False):
+    """
+    A 4 x 2 grid for the seven panels. The eighth cell holds the number of stations contributing each year in
+    the group views and is left empty for a single station.
+    """
+    fig = make_subplots(rows=4, cols=2, vertical_spacing=0.075, horizontal_spacing=0.09,
+                        subplot_titles=list(titles) + ['Stations contributing each year' if with_counts else ''])
     if not with_counts:
-        return make_subplots(rows=3, cols=2, subplot_titles=titles, vertical_spacing=0.11, horizontal_spacing=0.09)
-    # Group views add a full-width row at the bottom for the number of stations contributing each year.
-    return make_subplots(rows=4, cols=2, subplot_titles=list(titles) + ['Stations contributing each year'],
-                         specs=[[{}, {}], [{}, {}], [{}, {}], [{'colspan': 2}, None]],
-                         row_heights=[0.29, 0.29, 0.29, 0.13], vertical_spacing=0.085, horizontal_spacing=0.09)
+        fig.update_xaxes(visible=False, row=COUNTS_CELL[0], col=COUNTS_CELL[1])
+        fig.update_yaxes(visible=False, row=COUNTS_CELL[0], col=COUNTS_CELL[1])
+    return fig
 
 
 def _station_counts(fig, analyses):
@@ -118,9 +123,9 @@ def _station_counts(fig, analyses):
         hovertext=[f'WY{wy}: {v} station{"s" if v != 1 else ""}' + ('' if u else ' (too few for the regional series)')
                    for wy, v, u in zip(n.index, n.values, used)],
         hoverinfo='text',
-    ), row=4, col=1)
-    fig.update_yaxes(title_text='stations', rangemode='tozero', row=4, col=1)
-    fig.update_xaxes(title_text='Water year', row=4, col=1)
+    ), row=COUNTS_CELL[0], col=COUNTS_CELL[1])
+    fig.update_yaxes(title_text='stations', rangemode='tozero', row=COUNTS_CELL[0], col=COUNTS_CELL[1])
+    fig.update_xaxes(title_text='Water year', row=COUNTS_CELL[0], col=COUNTS_CELL[1])
 
 
 def _cell(k):
@@ -246,8 +251,8 @@ def indicator_vs_enso(indicators, enso, title, subtitle=''):
         else:
             fig.update_yaxes(title_text=si.INDICATORS[col][1], row=row, col=c)
         fig.update_xaxes(zeroline=True, zerolinecolor='rgb(160,160,160)', row=row, col=c)
-    for c in (1, 2):
-        fig.update_xaxes(title_text='Relative Oceanic Niño Index (RONI)', row=3, col=c)
+    for row, c in ((4, 1), (3, 2)):         # the lowest indicator panel in each column
+        fig.update_xaxes(title_text='Relative Oceanic Niño Index (RONI)', row=row, col=c)
     _phase_legend(fig)
     return _layout(fig, title, subtitle)
 
@@ -367,8 +372,8 @@ def group_vs_enso(analyses, enso, title, subtitle=''):
         if 'r' in r:
             xs = np.array([x[ok].min(), x[ok].max()])
             _line(fig, row, c, xs, _to_display(r['intercept'] + r['slope'] * xs, a['log']), r['p'])
-    for c in (1, 2):
-        fig.update_xaxes(title_text='Relative Oceanic Niño Index (RONI)', row=3, col=c)
+    for row, c in ((4, 1), (3, 2)):         # the lowest indicator panel in each column
+        fig.update_xaxes(title_text='Relative Oceanic Niño Index (RONI)', row=row, col=c)
     _station_counts(fig, analyses)
     _phase_legend(fig, with_stations=True)
     return _layout(fig, title, subtitle, GROUP_NOTE)

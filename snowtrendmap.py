@@ -19,10 +19,10 @@ import snowindicators as si
 import snowmap
 
 LESS_SNOW = {'peak_swe': -1, 'peak_day': -1, 'snow_on_day': +1, 'snow_off_day': -1, 'season_days': -1,
-             'melt_rate': None}    # sign of change toward less snow; None: no direction (sequential colours)
-PERCENT = {'peak_swe', 'melt_rate'}
+             'melt_rate': None, 'melt_rate_3d': None}   # sign of change toward less snow; None: no direction
+PERCENT = {'peak_swe', 'melt_rate', 'melt_rate_3d'}
 TREND_RANGE = {'peak_swe': 15, 'peak_day': 10, 'snow_on_day': 10, 'snow_off_day': 10, 'season_days': 15,
-               'melt_rate': 15}    # colours saturate beyond +/- this many units per decade
+               'melt_rate': 15, 'melt_rate_3d': 15}    # colours saturate beyond +/- this many units per decade
 R_RANGE = 0.6                      # ... and beyond +/- this correlation
 SIGNIFICANT = 0.05
 FDR_Q = 0.10

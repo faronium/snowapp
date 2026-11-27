@@ -106,7 +106,8 @@ def analysis_desc_md(dcc):
 
         Each complete past season is drawn with markers at its snow-on date (▲), peak (◆), fastest melt (▼)
         and snow-off date (■), as defined under *Snow Season Indicators* below; hover over a marker for the
-        date and value. Snow-on in September is marked at 1 October. A season has only the markers its data
+        date and value. The fastest melt marker gives both the 5-day and 3-day rates; where the fastest 3 days
+        fall more than a day away from the fastest 5, they have their own hollow marker (▽). Snow-on in September is marked at 1 October. A season has only the markers its data
         support, and the current season has none until it is complete.
 
         #### Snow Season Indicators (Trends tab)
@@ -118,8 +119,12 @@ def analysis_desc_md(dcc):
           because snow arrives before 1 October at some high stations. Short gaps in the data count as snow
           when there is snow on both sides.
         * **Season length**: the days from snow-on to snow-off.
-        * **Peak melt rate**: the largest 5-day mean daily loss of snow water equivalent between the peak and
-          snow-off.
+        * **Peak 5-day and 3-day melt rates**: the largest 5-day and 3-day mean daily losses of snow water
+          equivalent between the peak and snow-off. The 3-day rate is closer to the bursts of melt that drive
+          runoff, but noisier. It runs about 8% higher than the 5-day rate in a typical season, within 20% in
+          nine seasons out of ten, and the two pick different weeks about one season in ten. A sudden drop
+          that is not melt, such as a sensor fault or snow sliding off the pillow, inflates both, the 3-day
+          rate more: a 300 mm one-day drop reads as 100 mm/day over 3 days and 60 over 5.
 
         *Bare ground.* Some snow pillows read a steady value above zero when there is no snow, usually after a
         recalibration. The bare-ground level is taken from flat stretches of the record (a 7-day standard
@@ -144,12 +149,12 @@ def analysis_desc_md(dcc):
         per decade; with *Indicators vs RONI*, its correlation with RONI. The map follows the *Period* and
         *Remove the ENSO (RONI) signal* settings, so it always matches the figure beside it.
 
-        Trends are in days per decade for dates and season length. For peak snow water equivalent and melt
-        rate they are in percent per decade, from the Theil-Sen slope of the logarithm, so that stations with
+        Trends are in days per decade for dates and season length. For peak snow water equivalent and the
+        melt rates they are in percent per decade, from the Theil-Sen slope of the logarithm, so that stations with
         large and small snowpacks can be compared. Red marks change toward less snow: a later snow-on date,
         lower peak snow water equivalent, an earlier snow-off date, a shorter season or an earlier peak.
-        Correlations with RONI are coloured the same way, so red means less snow in El Niño years. Melt rate
-        has no such direction and uses a single red scale, darker for higher values. Colours stop changing
+        Correlations with RONI are coloured the same way, so red means less snow in El Niño years. Melt rates
+        have no such direction and uses a single red scale, darker for higher values. Colours stop changing
         beyond 10 days per decade (15 for season length), 15% per decade, or a correlation of 0.6.
 
         Only the stations in the current analysis are coloured: the chosen station on its own, its sub-basin
@@ -186,7 +191,7 @@ def analysis_desc_md(dcc):
         the group are left out.
 
         Dates and season length are combined in days, so results read as *days earlier or later than normal*.
-        Peak snow water equivalent and melt rate are combined on a logarithmic scale, so a year's value is a
+        Peak snow water equivalent and the melt rates are combined on a logarithmic scale, so a year's value is a
         ratio (*35% below normal*) and large and small snowpacks count in proportion. *Normal* is the group's
         average over its record. A station needs at least 5 seasons of an indicator to be included, and a year
         enters the regional series only if at least 2 stations reported it. Each station's own values, relative
@@ -201,8 +206,8 @@ def analysis_desc_md(dcc):
         its variance for the correlation between them (Dietz and Killeen, 1981, with missing years handled as
         in Hirsch and Slack, 1984). The regional slope is the median of the slopes between every pair of
         seasons within each station, pooled over the group, and is given per decade (in % per decade for snow
-        water equivalent and melt rate). Grouping helps most for the noisier indicators (peak date, snow-on
-        date and melt rate) and by joining records that cover different periods into a longer one.
+        water equivalent and the melt rates). Grouping helps most for the noisier indicators (peak date,
+        snow-on date and the melt rates) and by joining records that cover different periods into a longer one.
 
         ###### ENSO relationship for a group
         The regional series is compared with each water year's RONI using a least-squares line and the Pearson
@@ -327,7 +332,7 @@ def how_to_md(dcc):
 
         ###### The Trends Tab
         The Trends tab shows snow season indicators (peak snow, snow-on and snow-off dates, season length and
-        peak melt rate). Choose a station from the list, or click it on the map of the main tab. Under *Show*,
+        peak 5-day and 3-day melt rates). Choose a station from the list, or click it on the map of the main tab. Under *Show*,
         pick that station alone or combine it with the other stations in its sub-basin, its region, or all of
         BC. *Indicators by water year* shows each indicator over time with its trend; *Indicators vs RONI*
         shows each one against the strength of El Niño or La Niña that year. Ticking *Remove the ENSO (RONI)

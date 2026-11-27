@@ -50,6 +50,8 @@ def test_a_clean_season():
     assert abs(r.peak_day - wday('2019-04-01')) <= 2 and abs(r.peak_swe - 845) <= 15
     assert r.melt_rate == pytest.approx(20)
     assert wday('2019-04-01') < r.melt_day < wday('2019-05-13')
+    assert r.melt_rate_3d == pytest.approx(20)            # a steady melt: the same over 3 days
+    assert wday('2019-04-01') < r.melt_day_3d < wday('2019-05-13')
     assert np.isnan(r.offset_mm)
 
 
@@ -143,3 +145,17 @@ def test_enso_relationship():
     rng = np.random.default_rng(1)
     noisy = si.enso_relationship(x, rng.normal(size=30))
     assert abs(noisy['r']) < 0.5 and noisy['p'] > 0.01
+
+
+def test_a_short_burst_of_melt_shows_more_in_the_3_day_rate():
+    days = pd.date_range('2018-09-01', '2019-09-30')
+    peak = pd.Timestamp('2019-04-15')
+    up = np.clip((days - pd.Timestamp('2018-11-01')).days * 5.0, 0, None)
+    down = 800 - (days - peak).days * 20.0
+    swe = pd.Series(np.where(days <= peak, np.minimum(up, 800), down), index=days).clip(lower=0)
+    burst = (days > pd.Timestamp('2019-05-01')) & (days <= pd.Timestamp('2019-05-03'))
+    swe[days > pd.Timestamp('2019-05-01')] -= 60 * np.minimum((days[days > pd.Timestamp('2019-05-01')] - pd.Timestamp('2019-05-01')).days, 3)
+    swe = swe.clip(lower=0)
+    r = si.station_indicators(swe, [2019]).loc[2019]
+    assert r.melt_rate_3d == pytest.approx(80) and r.melt_rate == pytest.approx(56)   # 3 days at 80; 5 days avg 56
+    assert abs(r.melt_day_3d - si.water_year_day([pd.Timestamp('2019-05-02')], 2019)[0]) <= 1

@@ -16,9 +16,10 @@ SEASON_MARKERS = [
     ('snow_on_day', 'triangle-up', 'Snow-on'),
     ('peak_day', 'diamond', 'Peak'),
     ('melt_day', 'triangle-down', 'Fastest melt'),
+    ('melt_day_3d', 'triangle-down-open', 'Fastest melt'),
     ('snow_off_day', 'square', 'Snow-off'),
 ]
-MARKER_KEY = '▲ snow-on  ◆ peak  ▼ fastest melt  ■ snow-off'
+MARKER_KEY = '▲ snow-on  ◆ peak  ▼ fastest melt (▽ over 3 days, where that falls elsewhere)  ■ snow-off'
 ESTIMATE_KEY = 'Grey shading: estimated values'
 ESTIMATE_SHADE = 'rgba(60,60,60,0.35)'   # under a season's line where its values are estimates
 
@@ -57,8 +58,14 @@ def _marker_text(col, label, wy, row):
     if col == 'peak_day':
         return head + f'{row["peak_swe"]:.0f} mm on {water_year_day_label(row["peak_day"])} (5-day mean)'
     if col == 'melt_day':
-        return head + f'{row["melt_rate"]:.1f} mm/day around {water_year_day_label(row["melt_day"])} (5-day mean)'
+        return head + _melt_text(row, 'melt_rate', 'melt_day', 5)
+    if col == 'melt_day_3d':
+        return head + _melt_text(row, 'melt_rate_3d', 'melt_day_3d', 3)
     return head + water_year_day_label(row[col])
+
+
+def _melt_text(row, rate_col, day_col, days):
+    return f'{row[rate_col]:.1f} mm/day over {days} days around {water_year_day_label(row[day_col])}'
 
 
 def season_markers(season, row, wy, color, flags=None, **kwargs):
@@ -69,15 +76,21 @@ def season_markers(season, row, wy, color, flags=None, **kwargs):
     Snow-on in September is drawn at 1 October; dates past the end of the plot are left out.
     """
     x, y, symbols, text = [], [], [], []
+    # The 3-day fastest melt gets its own marker only when it falls on another day than the 5-day one;
+    # otherwise the one marker gives both rates.
+    d5, d3 = row.get('melt_day', np.nan), row.get('melt_day_3d', np.nan)
+    together = not (d5 is None or d3 is None or np.isnan(d5) or np.isnan(d3)) and abs(d5 - d3) <= 1
     for col, symbol, label in SEASON_MARKERS:
         day = row.get(col, np.nan)
-        if day is None or np.isnan(day) or day >= len(season):
+        if day is None or np.isnan(day) or day >= len(season) or (col == 'melt_day_3d' and together):
             continue
         k = max(int(day), 0)
         x.append(season.index[k]); y.append(season.iloc[k]); symbols.append(symbol)
         note = ' (before 1 Oct)' if day < 0 else ''
         if flags is not None and day >= 0 and int(flags.iloc[k]) in ESTIMATE_NOTES:
             note += f'<br>on an {ESTIMATE_NOTES[int(flags.iloc[k])]}'
+        if col == 'melt_day' and together:
+            note += '<br>' + _melt_text(row, 'melt_rate_3d', 'melt_day_3d', 3)
         text.append(_marker_text(col, label, wy, row) + note)
     if not x:
         return None
