@@ -114,3 +114,15 @@ def test_station_trends_for_peak_swe_are_in_percent_and_match_the_figure():
     stats = tm.station_stats({'S1': ind}, ['S1'], 'peak_swe', enso)
     assert f"{stats.loc['S1', 'value']:+.1f}%/decade" in title             # the map and the figure agree
     assert stats.loc['S1', 'p'] == pytest.approx(si.mann_kendall(years, swe.to_numpy()))   # p doesn't depend on the scale
+
+
+def test_spike_lines_can_be_switched_on_and_off():
+    import snowtrends
+    years = np.arange(1995, 2020)
+    ind = pd.DataFrame({c: pd.Series(np.linspace(100, 200, len(years)), index=years) for c in si.COLUMNS})
+    fig = snowtrends.indicator_timeseries(ind, pd.Series(0.0, index=years), 'S1')
+    on = snowtrends.with_spikes(fig, True)
+    axes = [a for name, a in on.layout.to_plotly_json().items() if name.startswith(('xaxis', 'yaxis'))]
+    assert axes and all(a['showspikes'] and a['spikemode'] == 'toaxis' for a in axes)
+    off = snowtrends.with_spikes(fig, False)
+    assert not any(a['showspikes'] for name, a in off.layout.to_plotly_json().items() if name.startswith(('xaxis', 'yaxis')))

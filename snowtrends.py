@@ -85,6 +85,15 @@ def _anomaly_axis(fig, row, col, is_log):
         fig.update_yaxes(title_text='days from normal', zeroline=True, zerolinecolor='rgb(160,160,160)', row=row, col=col)
 
 
+def with_spikes(fig, on=True):
+    """Spike lines from the hovered point to both axes of every panel (or none)."""
+    style = dict(showspikes=on, spikemode='toaxis', spikesnap='data', spikethickness=1, spikedash='dot',
+                 spikecolor='rgb(90,90,90)')
+    fig.update_xaxes(**style)
+    fig.update_yaxes(**style)
+    return fig
+
+
 def _empty(message):
     fig = go.Figure()
     fig.add_annotation(text=message, xref='paper', yref='paper', x=0.5, y=0.5, showarrow=False, font=dict(size=16))

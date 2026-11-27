@@ -34,7 +34,7 @@ import snowtrendmap
 from snowmap import anomaly_legend, draw_station_map, mapbox_wordmark
 from snowplot import snow_lineplot
 import snowgroups
-from snowtrends import PANELS, group_timeseries, group_vs_enso, indicator_timeseries, indicator_vs_enso
+from snowtrends import PANELS, group_timeseries, group_vs_enso, indicator_timeseries, indicator_vs_enso, with_spikes
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
 
@@ -267,11 +267,13 @@ def make_trends_tab(snap, default_station):
                                   className='mt-2'),
                     dcc.Checklist(id='trend-fdr', value=[], className='mt-2', options=[{
                         'label': ' Map: control the false discovery rate across stations', 'value': 'fdr'}]),
+                    dcc.Checklist(id='trend-spikes', value=['spikes'], className='mt-2', options=[{
+                        'label': ' Plots: spike lines to the axes on hover', 'value': 'spikes'}]),
                 ], width=12, lg=3),
             ]),
         ]),
         dbc.CardFooter(
-            "Indicators are calculated for each complete season. For a station, trends are Theil-Sen slopes with "
+            "Indicators are calculated for each season the data support. For a station, trends are Theil-Sen slopes with "
             "Mann-Kendall significance; for a group, its stations are combined into a regional series and tested "
             "with the Regional Kendall test. Lines against RONI are least-squares fits with Pearson correlation. "
             "Lines are solid where p < 0.05 and need at least 10 seasons. Methods are on the Analysis tab.",
@@ -649,8 +651,14 @@ def toggle_adjust(view):
     Input('trend-period', 'value'),
     Input('trend-fixed', 'value'),
     Input('trend-adjust', 'value'),
+    Input('trend-spikes', 'value'),
 )
-def update_trend_graph(sid, level, view, period, fixed, adjust):
+def update_trend_graph(sid, level, view, period, fixed, adjust, spikes):
+    fig = trend_figure(sid, level, view, period, fixed, adjust)
+    return fig if fig is no_update else with_spikes(fig, bool(spikes))
+
+
+def trend_figure(sid, level, view, period, fixed, adjust):
     snap = datastore.current()
     if snap is None or sid is None:
         return no_update

@@ -358,7 +358,9 @@ def how_to_md(dcc):
 
         ###### The Trends Tab
         The Trends tab shows snow season indicators (peak snow, snow-on and snow-off dates, season length and
-        peak 5-day and 3-day melt rates). Choose a station from the list, or click it on the map of the main tab. Under *Show*,
+        peak 5-day and 3-day melt rates). Choose a station from the list, or click it on the map of the main tab.
+        *Plots: spike lines to the axes on hover* draws dotted lines from the point under the pointer to both
+        axes, to read off its year and value. Under *Show*,
         pick that station alone or combine it with the other stations in its sub-basin, its region, or all of
         BC. *Indicators by water year* shows each indicator over time with its trend; *Indicators vs RONI*
         shows each one against the strength of El Niño or La Niña that year. Ticking *Remove the ENSO (RONI)
