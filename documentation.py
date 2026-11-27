@@ -72,6 +72,11 @@ def analysis_desc_md(dcc):
         The data from the individual years are presented as-is. As described above, the current year's data
         is likely to have spurious values that have not been corrected by quality control software.
 
+        Each complete past season is drawn with markers at its snow-on date (▲), peak (◆), fastest melt (▼)
+        and snow-off date (■), as defined under *Snow Season Indicators* below; hover over a marker for the
+        date and value. Snow-on in September is marked at 1 October. A season has only the markers its data
+        support, and the current season has none until it is complete.
+
         #### Snow Season Indicators (Trends tab)
         For each complete season at a station:
 
@@ -292,7 +297,9 @@ def how_to_md(dcc):
         presentation of the median and range curves for the station; the median entries give the number of
         complete seasons behind each median. The legend in the upper right adds other percentiles of the
         full record. The legend below the
-        graph's axes controls the plotting of individual years. Clicking on a legend entry turns the element
+        graph's axes controls the plotting of individual years, which come with markers at their snow-on,
+        peak, fastest melt and snow-off dates (hover over one for its date and value). Clicking on a legend
+        entry turns the element
         on or off. Double clicking turns all elements on or all but the clicked entry off. Finally, the graph and maps
         can both be zoomed into to modify the range of what is plotted. Additional controls in the upper right of
         the graph allow one to download an image of the current plot, reset the axes or choose a graph

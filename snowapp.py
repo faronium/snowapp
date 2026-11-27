@@ -530,6 +530,7 @@ def update_line_chart(onirange, clickData):
         fillarea,
         fillline,
         plottitle=plottitle,
+        indicators=snap.indicators.get(sid),
     )
 
 
