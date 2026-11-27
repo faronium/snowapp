@@ -40,3 +40,28 @@ def test_markers_share_the_season_legend_group():
     assert ('2002', 'season-2002', None, 'legendonly') in groups
     assert (None, 'season-2002', 'markers', 'legendonly') in groups
     assert not any(g[1] == 'season-2003' and g[2] == 'markers' for g in groups)   # no indicators, no markers
+
+
+def test_flagged_seasons_are_dotted_labelled_and_unmarked():
+    swe, row = season_and_row()
+    matrix = pd.DataFrame({2002: swe, 2003: swe})
+    ind = pd.DataFrame([row, row], index=[2002, 2003])
+    fig = snowplot.snow_lineplot(matrix, [2003], [2002, 2003], 2026, 'red', 'red', 'title', indicators=ind,
+                                 flagged={2002: 'Sensor fault.'})
+    flagged = [t for t in fig.data if t.legendgroup == 'season-2002']
+    assert len(flagged) == 1                                              # the line only, no markers
+    assert flagged[0].name == '2002 (flagged)' and flagged[0].line.dash == 'dot'
+    assert 'Sensor fault.' in flagged[0].hovertemplate
+    assert any(t.legendgroup == 'season-2003' and t.mode == 'markers' for t in fig.data)
+
+
+def test_estimated_stretches_are_shaded_and_noted():
+    swe, row = season_and_row()
+    flags = pd.Series(0, index=swe.index, dtype='int8'); flags.iloc[60:70] = 1; flags.iloc[200] = 2
+    traces = snowplot.season_traces(swe.index, swe, 2002, '#636EFA', flags)
+    shade, line = traces
+    shaded = np.where(~np.isnan(np.asarray(shade.y, dtype=float)))[0]
+    assert list(shaded) == list(range(59, 71)) + [199, 200, 201]       # each stretch plus a day either side
+    assert 'straight line in the archive' in line.customdata[65] and line.customdata[10] == ''
+    tr = snowplot.season_markers(swe, row, 2002, 'red', flags=flags)
+    assert 'gap filled' in tr.text[2]                                   # fastest melt on day 200

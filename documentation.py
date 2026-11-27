@@ -37,6 +37,36 @@ def analysis_desc_md(dcc):
         lower, warmer stations that melt out early still qualify. The current season is never included. The
         legend on the graph and the station details on the map give the number of complete seasons and the
         years they span, which differ from station to station.
+        ###### Data Cleaning
+        Snow pillows sometimes report one or two readings far from those around them, such as a midwinter drop
+        to zero or a jump of several hundred millimetres, before returning to the earlier level. These spikes
+        are removed before anything is plotted or calculated: a reading is dropped when it differs from both
+        the median of the three days before it and the median of the three days after it, in the same
+        direction, by more than 50 mm and by more than a quarter of that level. A storm or a melt that stays is
+        a step rather than a spike and is kept, as is the latest reading, which has nothing after it to compare
+        with. About one reading in twenty thousand is removed. Left in, these spikes moved snow-on dates by up to
+        three months and could turn a late-summer glitch into a season's peak.
+
+        Some of the archive is not measured but estimated: gaps, and sometimes whole periods between occasional
+        readings, are filled with straight lines. Snow does not come or go at a steady rate, so a stretch whose
+        daily changes all lie within 1 mm of each other is treated as an estimate when it runs for at least
+        10 days at 3 mm a day or more, or for at least 30 days at 1 mm a day or more. About one day in a
+        hundred is estimated this way, in about one season in eight, and older records have more: about one
+        day in thirty before 1990. These values are kept and used, but they are flagged.
+
+        This app fills gaps of up to 14 days in the same way, also flagged. Without this, a day missing from
+        one season changes the set of seasons behind that day's median and range, and the range jumps, most
+        visibly at stations with only a few seasons. A season still needs 95% of its days to be readings, not
+        filled values, to count as complete, and bare-ground levels for the snow-on and snow-off dates come from
+        readings only. On the plot, estimated stretches of a season are shaded and say so on hover, as do the
+        markers of dates that fall on them.
+
+        Some seasons have longer sensor faults that no simple rule can tell apart from real local weather.
+        These are found by comparing each station's seasons with those of stations nearby and are flagged after
+        review. A flagged season is drawn dotted on the plot and labelled as flagged, but is left out of the
+        medians, ranges, anomalies, indicators and trends. The flagged seasons are:
+
+        FLAGGED_SEASONS_LIST
         ###### Snow Ranges
         The primary elements of the plot are the median snow water equivalent for each day of the water year
         and a range about that median. The range runs from the 15.87th to the 84.13th percentile of the data for
@@ -69,7 +99,9 @@ def analysis_desc_md(dcc):
         RONI is resolved and may be selected at 0.1 degree increments. When the app opens, the slider is set
         to the ENSO phase of the most recent three-month RONI value.
         ###### Individual Snow Seasons
-        The data from the individual years are presented as-is. As described above, the current year's data
+        The data from the individual years are presented as received, apart from the spikes removed and the
+        short gaps filled as described under *Data Cleaning*. Estimated stretches are shaded and flagged
+        seasons are drawn dotted. As described above, the current year's data
         is likely to have spurious values that have not been corrected by quality control software.
 
         Each complete past season is drawn with markers at its snow-on date (▲), peak (◆), fastest melt (▼)
@@ -228,8 +260,24 @@ def analysis_desc_md(dcc):
         Wilks, D.S. (2016). "The stippling shows statistically significant grid points": how research results
         are routinely overstated and overinterpreted, and what to do about it. *Bulletin of the American
         Meteorological Society*, 97, 2263-2273.
-        '''
+        '''.replace('FLAGGED_SEASONS_LIST', _flagged_seasons_md())
     )
+
+
+def _flagged_seasons_md():
+    '''
+    A Markdown list of the flagged seasons in flagged_seasons.csv, indented to replace a placeholder line
+    of the documentation string (which carries the first line's indent).
+    '''
+    import pandas as pd
+    import snowdata
+    path = snowdata.FLAGGED_SEASONS_PATH
+    table = pd.read_csv(path, comment='#', dtype={'station_id': str}, skipinitialspace=True) if path.exists() else None
+    if table is None or table.empty:
+        return '* none'
+    return '\n        '.join(f'* {r.station_id} {r.name}, water year {int(r.water_year)}: {r.reason}'
+                             for r in table.itertuples(index=False))
+
 
 def how_to_md(dcc):
     '''

@@ -17,7 +17,9 @@ September after it; 0 if there is no flat stretch to go by. A level that can't b
 more, or both OFFSET_NOTE_MM or more and MAX_BARE_FRACTION of the season's peak or more) means a faulty
 sensor, and the dates that depend on it are left blank.
 
-Each value has its own data check and is left blank (NaN) when the data around it are missing.
+Each value has its own data check and is left blank (NaN) when the data around it are missing. Gaps of up to
+two weeks have already been filled with straight lines (snowdata.clean), so the checks concern longer gaps;
+bare-ground levels use readings only, never filled days.
 
 Dates are days of the water year: 0 is 1 October; negative values fall in the September before; 29 February
 counts as 28 February so that a given number is the same calendar day in every year.
@@ -88,10 +90,12 @@ def _plausible_bare(level, peak):
     return level < MAX_BARE_MM and not (level >= OFFSET_NOTE_MM and level >= MAX_BARE_FRACTION * peak)
 
 
-def station_indicators(series, seasons):
+def station_indicators(series, seasons, filled=None):
     """
     Indicators for one station: series is its daily SWE (DatetimeIndex), seasons the water years to compute
-    (normally its complete seasons). Returns a DataFrame indexed by water year with COLUMNS.
+    (normally its complete seasons), filled an optional boolean Series marking days filled in by the app
+    (snowdata.clean), which are not used for bare-ground levels. Returns a DataFrame indexed by water year
+    with COLUMNS.
     """
     s = series.dropna()
     if s.empty or not len(seasons):
@@ -100,7 +104,9 @@ def station_indicators(series, seasons):
     start = pd.Timestamp(min(seasons) - 2, 7, 1)
     days = pd.date_range(start, pd.Timestamp(max(seasons), 9, 30))
     s = series.reindex(days)
-    roll = s.rolling(FLAT_WINDOW, min_periods=FLAT_WINDOW - 1)
+    # Bare-ground levels come from readings only: a few filled days must not make a flat stretch.
+    readings = s if filled is None else s.where(~filled.reindex(days, fill_value=False).astype(bool))
+    roll = readings.rolling(FLAT_WINDOW, min_periods=FLAT_WINDOW - 1)
     arrays = {
         'x': s.to_numpy(dtype=float),
         'flat': roll.median().where(roll.std() < FLAT_STD_MM).to_numpy(dtype=float),

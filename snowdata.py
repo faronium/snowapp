@@ -5,6 +5,8 @@ anomalies, and assignment of ENSO index values to water years.
 These are plain functions of pandas objects, separate from data loading (ingest.py, snowdb.py) and from
 the Dash app, so they can be tested and used from the notebook.
 """
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
@@ -73,6 +75,130 @@ def complete_seasons(matrix, exclude=()):
     return [int(wy) for wy in coverage.index[coverage >= COMPLETE_FRACTION] if wy not in exclude]
 
 
+# ---------------------------------------------------------------- cleaning
+
+# Spikes: one or two readings far from the level on both sides of them, which then comes back.
+SPIKE_MM = 50.0            # at least this far from the level before and the level after...
+SPIKE_FRACTION = 0.25      # ...and at least this share of that level
+SPIKE_SIDE_DAYS = 3        # the level on each side: the median of this many days
+
+# Straight-line stretches: the archive fills some gaps (and some whole periods between occasional readings)
+# with straight lines. Snow doesn't come or go at a steady rate, so a run of daily changes that all lie within
+# STRAIGHT_BAND_MM of each other (the archive is in whole mm) is an estimate when it is at least this long and
+# this steep: (days, mm a day).
+STRAIGHT_BAND_MM = 1.0
+STRAIGHT_RULES = [(10, 3.0), (30, 1.0)]
+
+# Gaps of up to this many days are filled with a straight line, as the archive itself does.
+MAX_FILL_DAYS = 14
+
+# What each daily value is (the flags returned by clean()).
+MEASURED, STRAIGHT, FILLED = 0, 1, 2
+NO_DATA = -1
+ESTIMATE_NOTES = {STRAIGHT: 'estimate: a straight line in the archive', FILLED: 'estimate: a gap filled by this app'}
+
+# Seasons left out of all statistics after review (sensor faults no rule can tell from real weather).
+FLAGGED_SEASONS_PATH = Path(__file__).with_name('flagged_seasons.csv')
+
+
+def _spikes(x):
+    """Boolean mask of the spikes in one station's continuous daily series (numpy array, NaN for no data)."""
+    s = pd.Series(x)
+    # Medians of whatever readings there are in the days on each side (a neighbouring day may be missing).
+    before = s.rolling(SPIKE_SIDE_DAYS, min_periods=1).median().shift(1)
+    after = s[::-1].rolling(SPIKE_SIDE_DAYS, min_periods=1).median()[::-1].shift(-1)
+    off_before, off_after = s - before, s - after
+    limit = (SPIKE_FRACTION * ((before + after) / 2).abs()).clip(lower=SPIKE_MM)
+    spike = (off_before.abs() > limit) & (off_after.abs() > limit) & (np.sign(off_before) == np.sign(off_after))
+    return spike.to_numpy()
+
+
+def _straight(x):
+    """
+    Boolean mask of the values inside straight-line stretches (the readings at either end are kept as
+    measured): days covered by a window of STRAIGHT_RULES days whose daily changes all lie within
+    STRAIGHT_BAND_MM of each other and average at least the rule's rate, up or down.
+    """
+    change = pd.Series(x).diff()
+    inside = np.zeros(len(x), dtype=bool)
+    for days, rate in STRAIGHT_RULES:
+        window = change.rolling(days, min_periods=days)
+        ok = ((window.max() - window.min()) <= STRAIGHT_BAND_MM) & (window.mean().abs() >= rate)
+        # A window of changes ending on day t spans the values t - days .. t; its inside is t - days + 1 .. t - 1.
+        covered = ok.astype(float)[::-1].rolling(days - 1, min_periods=1).max()[::-1].shift(-1)
+        inside |= covered.fillna(0).to_numpy() > 0
+    return inside
+
+
+def _fill(x):
+    """Fill gaps of up to MAX_FILL_DAYS days between two readings with a straight line: (filled x, mask)."""
+    s = pd.Series(x)
+    missing = s.isna()
+    gap_length = missing.groupby((~missing).cumsum()).transform('sum')
+    line = s.interpolate(limit_area='inside')
+    fill = (missing & (gap_length <= MAX_FILL_DAYS) & line.notna()).to_numpy()
+    out = x.copy()
+    out[fill] = line.to_numpy()[fill]
+    return out, fill
+
+
+def clean(swe):
+    """
+    Clean the daily SWE (wide: date x station), station by station:
+
+    1. Remove one- and two-day spikes, such as a midwinter drop to zero or a jump of hundreds of mm that
+       comes straight back. A reading is a spike when it differs from both the median of the readings in the
+       SPIKE_SIDE_DAYS days before it and the median of those in the days after it, in the same direction,
+       by more than SPIKE_MM and SPIKE_FRACTION of that level. A storm or melt that stays (a step) is kept,
+       and so is the latest reading, which has nothing after it to compare with.
+    2. Flag straight-line stretches in the archive as estimates (kept, not removed).
+    3. Fill gaps of up to MAX_FILL_DAYS days with a straight line, flagged as estimates. The latest reading
+       is never extended forward.
+
+    Returns (swe on continuous days, flags of the same shape with MEASURED, STRAIGHT, FILLED or NO_DATA as
+    int8, counts {'spikes', 'straight', 'filled'}).
+    """
+    if swe.empty:
+        return swe.copy(), pd.DataFrame(index=swe.index, columns=swe.columns, dtype='int8'), \
+            {'spikes': 0, 'straight': 0, 'filled': 0}
+    days = pd.date_range(swe.index.min(), swe.index.max())
+    daily = swe.reindex(days)                   # continuous days, so the windows are calendar days
+    flags = np.full(daily.shape, NO_DATA, dtype=np.int8)
+    counts = {'spikes': 0, 'straight': 0, 'filled': 0}
+    for k, sid in enumerate(daily.columns):
+        x = daily[sid].to_numpy(dtype=float).copy()
+        spike = _spikes(x)
+        x[spike] = np.nan
+        straight = _straight(x)
+        x, filled = _fill(x)
+        f = np.where(np.isnan(x), NO_DATA, MEASURED).astype(np.int8)
+        f[straight] = STRAIGHT
+        f[filled] = FILLED
+        daily[sid] = x
+        flags[:, k] = f
+        counts['spikes'] += int(spike.sum())
+        counts['straight'] += int(straight.sum())
+        counts['filled'] += int(filled.sum())
+    return daily, pd.DataFrame(flags, index=days, columns=daily.columns), counts
+
+
+def flag_matrix(flags):
+    """One station's flags from clean() as a season_matrix (day of water year x water year), int8."""
+    return season_matrix(flags.where(flags != NO_DATA).astype(float)).fillna(NO_DATA).astype(np.int8)
+
+
+def read_flagged_seasons(path=FLAGGED_SEASONS_PATH):
+    """station_id -> {water year: reason} from the reviewed list of faulty seasons (empty if there is none)."""
+    path = Path(path)
+    if not path.exists():
+        return {}
+    table = pd.read_csv(path, comment='#', dtype={'station_id': str}, skipinitialspace=True)
+    flagged = {}
+    for row in table.itertuples(index=False):
+        flagged.setdefault(row.station_id.strip(), {})[int(row.water_year)] = str(row.reason).strip()
+    return flagged
+
+
 def season_quantiles(matrix, seasons, quantiles=QUANTILES):
     """For each day of the water year, the given quantiles across the given seasons (columns are the quantiles)."""
     if len(seasons) == 0:
@@ -90,18 +216,18 @@ def season_span(seasons):
 
 # ---------------------------------------------------------------- climatology and anomalies
 
-def station_climatologies(matrices, current_wy):
+def station_climatologies(matrices, complete):
     """
     For each station (dict of station_id -> season_matrix): the median SWE for each day of the water year
-    across the station's complete seasons, excluding the current one. This is the same median drawn as the
-    grey line on the plot.
+    across the station's complete seasons (dict of station_id -> water years, which leave out the current
+    season and flagged ones). This is the same median drawn as the grey line on the plot.
 
     Returns (medians, info): medians is a DataFrame (day of water year x station); info is indexed by
     station with n_seasons, first_season, last_season and span (text for display).
     """
     medians, info = {}, {}
     for sid, matrix in matrices.items():
-        seasons = complete_seasons(matrix, exclude=[current_wy])
+        seasons = list(complete.get(sid, []))
         medians[sid] = matrix[seasons].median(axis=1) if seasons else pd.Series(np.nan, index=matrix.index)
         info[sid] = {
             'n_seasons': len(seasons),

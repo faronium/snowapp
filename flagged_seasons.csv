@@ -1,0 +1,6 @@
+# Seasons left out of all statistics (medians, ranges, anomalies, indicators and trends) after review, for
+# sensor faults that no automatic rule can tell apart from real local weather. They are still drawn on the
+# plot, dotted and labelled as flagged. water_year is the year the season ends (2004 = Oct 2003 to Sep 2004).
+station_id,name,water_year,reason
+1C20P,Boss Mountain Mine,2004,"The pillow stopped registering snow from late November to mid-January: its reading fell from about 20 mm to near zero while stations nearby gained 200-400 mm. Snow-on and peak are wrong."
+1A03P,Barkerville,2009,"Exactly zero until 2 December, then a straight-line rise of about 4 mm a day into late January, which looks like filled-in values rather than measurements. Stations nearby had snow from October."

@@ -44,6 +44,8 @@ class Snapshot:
     enso: pd.Series                 # ENSO value per water year
     enso_latest: tuple              # (season, year, value) of the newest seasonal value
     sources: pd.DataFrame = field(default_factory=pd.DataFrame)
+    flagged: dict = field(default_factory=dict)   # station_id -> {water year: reason}, left out of statistics
+    estimates: dict = field(default_factory=dict)  # station_id -> snowdata.flag_matrix (estimated days)
 
     @property
     def start_range(self):
@@ -53,14 +55,23 @@ class Snapshot:
 def build_snapshot(con):
     """Read the database and derive everything the callbacks need."""
     version = snowdb.data_version(con)
-    swe = snowdb.read_swe(con)
+    swe, flags, counts = snowdata.clean(snowdb.read_swe(con))
+    log.info('cleaning: removed %(spikes)d spikes; %(straight)d straight-line and %(filled)d filled days '
+             'flagged as estimates', counts)
     current_wy = int(snowdata.water_year([swe.index.max()])[0])
+    flagged = snowdata.read_flagged_seasons()
 
     matrices = {sid: snowdata.season_matrix(swe[sid]) for sid in swe.columns}
-    complete = {sid: snowdata.complete_seasons(m, exclude=[current_wy]) for sid, m in matrices.items()}
-    medians, info = snowdata.station_climatologies(matrices, current_wy)
+    estimates = {sid: snowdata.flag_matrix(flags[sid]) for sid in swe.columns}
+    # A season is complete on the archive's own readings: days this app filled don't count.
+    complete = {sid: snowdata.complete_seasons(m.where(estimates[sid] != snowdata.FILLED),
+                                               exclude=[current_wy, *flagged.get(sid, {})])
+                for sid, m in matrices.items()}
+    medians, info = snowdata.station_climatologies(matrices, complete)
     anomalies = snowdata.current_anomalies(swe, medians)
-    indicators = {sid: snowindicators.station_indicators(swe[sid], complete[sid]) for sid in swe.columns}
+    indicators = {sid: snowindicators.station_indicators(swe[sid], complete[sid],
+                                                         filled=flags[sid] == snowdata.FILLED)
+                  for sid in swe.columns}
 
     stations = snowdb.read_stations(con).set_index('station_id')
     stations = stations.join(info).join(anomalies)
@@ -82,6 +93,8 @@ def build_snapshot(con):
         enso=snowdata.enso_by_water_year(enso),
         enso_latest=snowdata.latest_enso(enso),
         sources=snowdb.read_source_states(con),
+        flagged=flagged,
+        estimates=estimates,
     )
 
 

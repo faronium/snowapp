@@ -531,6 +531,8 @@ def update_line_chart(onirange, clickData):
         fillline,
         plottitle=plottitle,
         indicators=snap.indicators.get(sid),
+        flagged=snap.flagged.get(sid),
+        estimates=snap.estimates.get(sid),
     )
 
 
